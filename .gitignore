@@ -1,0 +1,23 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+
+# Node / React
+node_modules/
+frontend/build/
+npm-debug.log*
+
+# Env / secrets
+.env.local
+.env.*.local
+appsettings.*.local.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Text notes (keep robots.txt, the site needs it)
+*.txt
+!robots.txt

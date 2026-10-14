@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <linearGradient id="cpOgGrad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="32" y2="32">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#34d399" />
+    </linearGradient>
+    <radialGradient id="cpOgGlow" cx="50%" cy="38%" r="60%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.14" />
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#060612" />
+  <rect width="1200" height="630" fill="url(#cpOgGlow)" />
+
+  <g transform="translate(508, 170) scale(6)">
+    <path d="M13 6 L5 16 L13 26" stroke="url(#cpOgGrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M19 6 L27 16 L19 26" stroke="url(#cpOgGrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M13.5 16 L18.5 16" stroke="url(#cpOgGrad)" stroke-width="3" stroke-linecap="round" />
+    <path d="M16 13.5 L16 18.5" stroke="url(#cpOgGrad)" stroke-width="3" stroke-linecap="round" />
+  </g>
+
+  <text x="600" y="430" font-family="Arial, sans-serif" font-size="56" font-weight="700" fill="#f8fafc" text-anchor="middle">
+    Code<tspan fill="#38bdf8">Pulse</tspan>
+  </text>
+  <text x="600" y="475" font-family="Arial, sans-serif" font-size="22" fill="#94a3b8" text-anchor="middle">
+    Track every contest, sharpen every skill.
+  </text>
+</svg>

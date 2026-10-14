@@ -1,0 +1,122 @@
+#root {
+  min-height: 100vh;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: #e2e8f0;
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 32%),
+    radial-gradient(circle at top right, rgba(16, 185, 129, 0.1), transparent 30%),
+    linear-gradient(180deg, #050816 0%, #0a1020 44%, #060912 100%);
+  overflow-x: hidden;
+}
+
+.app-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-shell::before,
+.app-shell::after {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 999px;
+  filter: blur(6px);
+}
+
+.app-shell::before {
+  top: -120px;
+  right: -80px;
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.14) 0%, rgba(14, 165, 233, 0) 70%);
+}
+
+.app-shell::after {
+  bottom: -150px;
+  left: -120px;
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.11) 0%, rgba(16, 185, 129, 0) 72%);
+}
+
+.app-main {
+  width: 100%;
+  flex: 1 1 auto;
+}
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(5, 8, 22, 0.78);
+  backdrop-filter: blur(18px);
+}
+
+header > div {
+  width: min(100%, 80rem);
+  margin: 0 auto;
+}
+
+header nav {
+  scrollbar-width: none;
+}
+
+header nav::-webkit-scrollbar {
+  display: none;
+}
+
+main {
+  width: 100%;
+}
+
+footer {
+  margin-top: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(5, 8, 22, 0.86);
+}
+
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  transition: transform 0.15s ease, opacity 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+::selection {
+  background: rgba(14, 165, 233, 0.3);
+  color: #f8fafc;
+}
+
+@media (max-width: 768px) {
+  header > div {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  main > div {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
