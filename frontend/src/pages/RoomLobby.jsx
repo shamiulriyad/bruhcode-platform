@@ -4,16 +4,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import confetti from 'canvas-confetti';
 import { roomAPI } from '../api';
-import { useAuth } from '../context/AuthContext';
 import useRoomStore from '../store/useRoomStore';
-import { startConnection, stopConnection, getConnection } from '../utils/signalr';
+import { startConnection } from '../utils/signalr';
 import CountdownRing from '../components/rooms/CountdownRing';
 import WaitingIllustration from '../components/rooms/WaitingIllustration';
 
 export default function RoomLobby() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { room, setRoom, members, setMembers, addMember, removeMember, timer, setTimer, resetRoom } = useRoomStore();
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);

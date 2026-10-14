@@ -16,9 +16,8 @@ export default function LiveRoom() {
   const { user } = useAuth();
   const {
     room, setRoom, members, setMembers, addMember, removeMember,
-    leaderboard, setLeaderboard, grid, setGrid, updateGridCell,
-    timer, setTimer, messages, setMessages, addMessage,
-    unlockedThreads, unlockThread, resetRoom, setConnectionStatus,
+    leaderboard, setLeaderboard, grid, updateGridCell,
+    timer, setTimer, resetRoom,
   } = useRoomStore();
 
   const [loading, setLoading] = useState(true);
@@ -27,6 +26,11 @@ export default function LiveRoom() {
   const [threadLocked, setThreadLocked] = useState(true);
   const pollRef = useRef(null);
   const connRef = useRef(null);
+  // SignalR handlers are registered once, so they read the latest values through refs
+  const selectedProblemIdRef = useRef(null);
+  const userIdRef = useRef(null);
+  selectedProblemIdRef.current = selectedProblem?.id;
+  userIdRef.current = user?.id;
 
   // Fetch room data
   const fetchRoom = useCallback(async () => {
@@ -38,8 +42,8 @@ export default function LiveRoom() {
         navigate(`/rooms/${id}/summary`);
         return;
       }
-      if (data.problems?.length > 0 && !selectedProblem) {
-        setSelectedProblem(data.problems[0]);
+      if (data.problems?.length > 0) {
+        setSelectedProblem((current) => current ?? data.problems[0]);
       }
     } catch (err) {
       toast.error('Failed to load room');
@@ -47,7 +51,7 @@ export default function LiveRoom() {
     } finally {
       setLoading(false);
     }
-  }, [id, setRoom, setMembers, navigate, selectedProblem]);
+  }, [id, setRoom, setMembers, navigate]);
 
   // Fetch leaderboard via REST
   const fetchLeaderboard = useCallback(async () => {
@@ -63,6 +67,16 @@ export default function LiveRoom() {
     return () => resetRoom();
   }, [fetchRoom, fetchLeaderboard, resetRoom]);
 
+  // Fetch messages for one problem thread
+  const fetchThreadMessages = useCallback(async (problemId) => {
+    if (!problemId) return;
+    try {
+      const { data } = await roomAPI.getMessages(id, problemId);
+      setThreadLocked(data.locked);
+      setThreadMessages(data.messages || []);
+    } catch {}
+  }, [id]);
+
   // SignalR connection
   useEffect(() => {
     const setupSignalR = async () => {
@@ -70,7 +84,6 @@ export default function LiveRoom() {
         const conn = await startConnection();
         connRef.current = conn;
         await conn.invoke('JoinRoom', parseInt(id));
-        setConnectionStatus('connected');
 
         conn.on('TimerSync', (data) => setTimer(data));
 
@@ -92,9 +105,8 @@ export default function LiveRoom() {
         conn.on('LeaderboardUpdate', (data) => setLeaderboard(data));
 
         conn.on('ThreadUnlocked', (data) => {
-          unlockThread(data.userId, data.problemId);
           // Refresh thread if viewing this problem
-          if (data.userId === user?.id && selectedProblem?.id === data.problemId) {
+          if (data.userId === userIdRef.current && data.problemId === selectedProblemIdRef.current) {
             fetchThreadMessages(data.problemId);
           }
         });
@@ -103,14 +115,12 @@ export default function LiveRoom() {
         conn.on('MemberLeft', (data) => removeMember(data.userId));
 
         conn.on('NewMessage', (msg) => {
-          addMessage(msg);
-          if (msg.problemId === selectedProblem?.id) {
+          if (msg.problemId === selectedProblemIdRef.current) {
             setThreadMessages((prev) => [...prev, msg]);
           }
         });
       } catch (err) {
         console.error('SignalR error:', err);
-        setConnectionStatus('disconnected');
         // Start fallback polling
         pollRef.current = setInterval(() => {
           fetchLeaderboard();
@@ -134,17 +144,7 @@ export default function LiveRoom() {
       }
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [id]);
-
-  // Fetch thread messages when problem selection changes
-  const fetchThreadMessages = useCallback(async (problemId) => {
-    if (!problemId) return;
-    try {
-      const { data } = await roomAPI.getMessages(id, problemId);
-      setThreadLocked(data.locked);
-      setThreadMessages(data.messages || []);
-    } catch {}
-  }, [id]);
+  }, [id, navigate, fetchLeaderboard, fetchThreadMessages, setTimer, setLeaderboard, updateGridCell, addMember, removeMember]);
 
   useEffect(() => {
     if (selectedProblem?.id) {

@@ -475,7 +475,7 @@ export default function Register() {
 
                 <h1 className="mt-5 text-3xl font-semibold tracking-tight text-white lg:text-4xl"
                   style={{ animation:'fadeUp 0.55s ease 0.62s both' }}>
-                  Join CodePulse
+                  Join BRUHCODE
                 </h1>
                 <p className="mt-3 text-sm leading-7 text-slate-400"
                   style={{ animation:'fadeUp 0.55s ease 0.72s both', maxWidth:320 }}>

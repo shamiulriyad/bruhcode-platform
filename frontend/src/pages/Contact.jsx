@@ -188,12 +188,12 @@ function AlternativeContactPanel() {
   return (
     <div className="flex flex-col gap-4">
       <a
-        href="mailto:feedback@codepulse.com"
+        href="mailto:feedback@bruhcode.com"
         className="p-5 rounded-xl border border-white/5 bg-slate-900/20 hover:bg-slate-900/40 hover:border-sky-500/20 transition-all"
       >
         <span className="text-lg block mb-2">📬</span>
         <h4 className="text-sm font-bold text-white mb-1">Email Us</h4>
-        <p className="text-xs text-slate-400">feedback@codepulse.com</p>
+        <p className="text-xs text-slate-400">feedback@bruhcode.com</p>
       </a>
 
       <a

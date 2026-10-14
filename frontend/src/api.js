@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+// Project-specific name so a global REACT_APP_API_URL from another project can't override it
+export const API_URL = process.env.REACT_APP_BRUHCODE_API_URL || 'http://localhost:5163';
+
 const api = axios.create({
-  baseURL: 'http://localhost:5163',
+  baseURL: API_URL,
 });
 
 api.interceptors.request.use((config) => {
@@ -31,11 +34,8 @@ api.interceptors.response.use(
 // Contest API endpoints
 export const contestAPI = {
   getAll: () => api.get('/api/contests'),
-  getUpcoming: () => api.get('/api/contests/upcoming'),
   getById: (id) => api.get(`/api/contests/${id}`),
-  filter: (params) => api.get('/api/contests/filter', { params }),
 };
-
 
 export const authAPI = {
   login: (payload) => api.post('/api/auth/login', payload),
@@ -57,8 +57,6 @@ export const userAPI = {
   getProfile: () => api.get('/api/user/profile'),
 };
 
-export default api;
-
 export const statsAPI = {
   get: () => api.get('/api/stats'),
 };
@@ -75,10 +73,8 @@ export const roomAPI = {
   getAll: () => api.get('/api/rooms'),
   getById: (id) => api.get(`/api/rooms/${id}`),
 
-  // Join / Leave
+  // Join
   joinByCode: (inviteCode) => api.post('/api/rooms/join', { inviteCode }),
-  lookupByCode: (code) => api.get(`/api/rooms/join/${code}`),
-  leave: (id) => api.post(`/api/rooms/${id}/leave`),
 
   // Progress
   updateProgress: (id, roomProblemId, status) =>
@@ -104,8 +100,6 @@ export const brainGymAPI = {
     api.get(`/api/games/${gameKey}/questions?difficulty=${difficulty}&count=${count}`),
   submitScore: (gameKey, payload) =>
     api.post(`/api/games/${gameKey}/submit-score`, payload),
-  getMyStats: (gameKey) =>
-    api.get(`/api/games/${gameKey}/my-stats`),
   getLeaderboard: (gameKey, top = 20) =>
     api.get(`/api/games/${gameKey}/leaderboard?top=${top}`),
   getOverview: () =>
@@ -114,9 +108,4 @@ export const brainGymAPI = {
     api.get(`/api/games/${gameKey}/my-rank`),
 };
 
-// Backward-compat alias (used by ComplexityGame.jsx)
-export const gamesAPI = {
-  getQuestions: (difficulty = 'Mixed', count = 10) => brainGymAPI.getQuestions('complexity_guess', difficulty, count),
-  submitScore: (payload) => brainGymAPI.submitScore('complexity_guess', payload),
-};
-
+export default api;

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-const useRoomStore = create((set, get) => ({
+const useRoomStore = create((set) => ({
   // Current room data
   room: null,
   setRoom: (room) => set({ room }),
@@ -23,7 +23,6 @@ const useRoomStore = create((set, get) => ({
 
   // Solve grid: { [userId]: { [problemId]: { status, solvedAt, attempts } } }
   grid: {},
-  setGrid: (grid) => set({ grid }),
   updateGridCell: (userId, problemId, data) =>
     set((s) => ({
       grid: {
@@ -39,32 +38,6 @@ const useRoomStore = create((set, get) => ({
   timer: { remainingSeconds: 0, totalSeconds: 0, status: 'Scheduled' },
   setTimer: (timer) => set({ timer }),
 
-  // Messages grouped by problemId (0 = general chat)
-  messages: {},
-  setMessages: (problemId, msgs) =>
-    set((s) => ({ messages: { ...s.messages, [problemId || 0]: msgs } })),
-  addMessage: (msg) =>
-    set((s) => {
-      const key = msg.problemId || 0;
-      const existing = s.messages[key] || [];
-      return { messages: { ...s.messages, [key]: [...existing, msg] } };
-    }),
-
-  // Unlocked threads: Set of "userId_problemId" keys
-  unlockedThreads: new Set(),
-  unlockThread: (userId, problemId) =>
-    set((s) => {
-      const next = new Set(s.unlockedThreads);
-      next.add(`${userId}_${problemId}`);
-      return { unlockedThreads: next };
-    }),
-  isThreadUnlocked: (userId, problemId) =>
-    get().unlockedThreads.has(`${userId}_${problemId}`),
-
-  // Connection status
-  connectionStatus: 'disconnected', // 'connected' | 'reconnecting' | 'disconnected'
-  setConnectionStatus: (status) => set({ connectionStatus: status }),
-
   // Reset all room state
   resetRoom: () =>
     set({
@@ -73,9 +46,6 @@ const useRoomStore = create((set, get) => ({
       leaderboard: [],
       grid: {},
       timer: { remainingSeconds: 0, totalSeconds: 0, status: 'Scheduled' },
-      messages: {},
-      unlockedThreads: new Set(),
-      connectionStatus: 'disconnected',
     }),
 }));
 

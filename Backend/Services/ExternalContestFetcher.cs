@@ -3,7 +3,6 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.Playwright;
 
 namespace Backend.Services
 {
@@ -329,110 +328,59 @@ namespace Backend.Services
             }
         }
 
-        private static DateTime GetNextDayOfWeek(DateTime from, DayOfWeek dayOfWeek)
-        {
-            var daysToAdd = (dayOfWeek - from.DayOfWeek + 7) % 7;
-            if (daysToAdd == 0 && from.Hour >= 14)
-            {
-                daysToAdd = 7;
-            }
-
-            return from.Date.AddDays(daysToAdd);
-        }
-
         public async Task<List<Contest>> FetchGfgContestsAsync()
         {
             try
             {
-                const string url = "https://codolio.com/event-tracker";
+                const string url = "https://practiceapi.geeksforgeeks.org/api/vr/events/?page_number=1&sub_type=all&type=contest";
+                var response = await _httpClient.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+
+                using var stream = await response.Content.ReadAsStreamAsync();
+                using var document = await JsonDocument.ParseAsync(stream);
+
                 var contests = new List<Contest>();
                 var now = DateTime.UtcNow;
 
-                var playwright = await Playwright.CreateAsync();
-                await using var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+                if (document.RootElement.TryGetProperty("results", out var results) &&
+                    results.TryGetProperty("upcoming", out var upcoming))
                 {
-                    Headless = true,
-                    Args = new[] { "--no-sandbox" }
-                });
-
-                await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
-                {
-                    ViewportSize = new ViewportSize { Width = 1440, Height = 1600 }
-                });
-
-                var page = await context.NewPageAsync();
-                await page.GotoAsync(url, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
-                await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-                var allLinks = await page.Locator("a[href*='google.com/calendar/render']")
-                    .AllAsync();
-
-                _logger.LogInformation($"Found {allLinks.Count} total calendar links on Codolio");
-
-                foreach (var linkElement in allLinks)
-                {
-                    var calendarLink = await linkElement.GetAttributeAsync("href");
-                    if (string.IsNullOrWhiteSpace(calendarLink) || !calendarLink.Contains("GeeksForGeeks", StringComparison.OrdinalIgnoreCase))
+                    foreach (var item in upcoming.EnumerateArray())
                     {
-                        continue;
-                    }
+                        var name = item.GetProperty("name").GetString();
+                        var slug = item.GetProperty("slug").GetString();
+                        var startText = item.GetProperty("start_time").GetString();
+                        var endText = item.GetProperty("end_time").GetString();
 
-                    var decodedLink = Uri.UnescapeDataString(calendarLink);
-                    var linkMatch = Regex.Match(
-                        decodedLink,
-                        @"text=(?<text>[^&]+)&dates=(?<start>\d{8}T\d{9})[\s\+]053/(?<end>\d{8}T\d{9})[\s\+]053&details=\[GeeksForGeeks\]:\s*(?<details>[^&]+)&sf=true&output=xml&location=(?<location>https://practice\.geeksforgeeks\.org/contest/[^&]+)",
-                        RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(slug) ||
+                            !DateTime.TryParse(startText, CultureInfo.InvariantCulture, DateTimeStyles.None, out var startLocal) ||
+                            !DateTime.TryParse(endText, CultureInfo.InvariantCulture, DateTimeStyles.None, out var endLocal))
+                        {
+                            continue;
+                        }
 
-                    if (!linkMatch.Success)
-                    {
-                        _logger.LogWarning($"GFG link regex did not match: {decodedLink.Substring(0, Math.Min(150, decodedLink.Length))}");
-                        continue;
-                    }
+                        // GFG returns times in IST (UTC+5:30) without an offset
+                        var startTime = DateTime.SpecifyKind(startLocal.AddHours(-5).AddMinutes(-30), DateTimeKind.Utc);
+                        if (startTime <= now)
+                        {
+                            continue;
+                        }
 
-                    var titleText = Uri.UnescapeDataString(linkMatch.Groups["text"].Value).Trim().Replace("+", " ");
-                    var detailsText = Uri.UnescapeDataString(linkMatch.Groups["details"].Value).Trim().Replace("+", " ");
-                    var locationText = Uri.UnescapeDataString(linkMatch.Groups["location"].Value).Trim();
+                        var durationMinutes = (int)Math.Max(0, (endLocal - startLocal).TotalMinutes);
 
-                    if (!DateTime.TryParseExact(
-                        linkMatch.Groups["start"].Value,
-                        "yyyyMMdd'T'HHmmssfff",
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.None,
-                        out var startLocal) ||
-                        !DateTime.TryParseExact(
-                            linkMatch.Groups["end"].Value,
-                            "yyyyMMdd'T'HHmmssfff",
-                            CultureInfo.InvariantCulture,
-                            DateTimeStyles.None,
-                            out var endLocal))
-                    {
-                        _logger.LogWarning($"GFG date parse failed for: {titleText}");
-                        continue;
-                    }
+                        contests.Add(new Contest
+                        {
+                            Name = name.Trim(),
+                            Platform = "GeeksforGeeks",
+                            StartTime = startTime,
+                            Duration = durationMinutes > 0 ? durationMinutes : 120,
+                            Url = $"https://practice.geeksforgeeks.org/contest/{slug}"
+                        });
 
-                    var startTime = DateTime.SpecifyKind(startLocal.AddHours(-5).AddMinutes(-30), DateTimeKind.Utc);
-                    if (startTime <= now)
-                    {
-                        _logger.LogWarning($"GFG contest already started or in past: {titleText} at {startTime}");
-                        continue;
-                    }
-
-                    var durationMinutes = (int)Math.Max(0, (endLocal - startLocal).TotalMinutes);
-
-                    contests.Add(new Contest
-                    {
-                        Name = string.IsNullOrWhiteSpace(titleText) ? detailsText : titleText,
-                        Platform = "GeeksforGeeks",
-                        StartTime = DateTime.SpecifyKind(startTime, DateTimeKind.Utc),
-                        Duration = durationMinutes > 0 ? durationMinutes : 120,
-                        Url = locationText
-                    });
-
-                    _logger.LogInformation($"Added GFG contest: {titleText} at {startTime}");
-
-                    if (contests.Count >= 10)
-                    {
-                        break;
+                        if (contests.Count >= 10)
+                        {
+                            break;
+                        }
                     }
                 }
 
@@ -441,7 +389,7 @@ namespace Backend.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error fetching GeeksforGeeks contests: {ex.Message}\n{ex.StackTrace}");
+                _logger.LogError($"Error fetching GeeksforGeeks contests: {ex.Message}");
                 return new();
             }
         }

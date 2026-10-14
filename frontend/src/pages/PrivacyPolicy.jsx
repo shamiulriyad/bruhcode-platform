@@ -7,8 +7,8 @@ import { useScrollSpy, TableOfContents, PolicySection, BackToTopButton } from '.
    Update `lastUpdated` any time the policy text changes below. */
 const PRIVACY_CONFIG = {
   lastUpdated: '2026-07-06',
-  companyName: 'CodePulse',
-  contactEmail: 'privacy@codepulse.com',
+  companyName: 'BRUHCODE',
+  contactEmail: 'privacy@bruhcode.com',
 };
 
 const TOC_ITEMS = [
@@ -119,7 +119,7 @@ export default function PrivacyPolicy() {
 
             <PolicySection id="childrens-privacy" title="8. Children's Privacy">
               <p>
-                CodePulse is not intended for users under the age of 13. [Placeholder — confirm and adjust the minimum
+                BRUHCODE is not intended for users under the age of 13. [Placeholder — confirm and adjust the minimum
                 age to match your actual policy and applicable regulations.]
               </p>
             </PolicySection>

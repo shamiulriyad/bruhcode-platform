@@ -91,7 +91,7 @@ namespace Backend.Controllers
                 .Take(count)
                 .Select(q =>
                 {
-                    var responseObj = new Dictionary<string, object>
+                    var responseObj = new Dictionary<string, object?>
                     {
                         { "id", q.Id },
                         { "gameId", q.GameId },

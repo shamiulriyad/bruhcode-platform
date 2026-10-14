@@ -39,7 +39,7 @@ export default function Navbar() {
           <Logo size={36} />
           <div>
             <div className="text-xl font-bold tracking-tight text-white group-hover:text-sky-400 transition-colors">
-              Code<span className="text-sky-400">Pulse</span>
+              BRUH<span className="text-sky-400">CODE</span>
             </div>
             <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">
               Contest Hub

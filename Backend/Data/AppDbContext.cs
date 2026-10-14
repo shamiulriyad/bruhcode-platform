@@ -70,7 +70,6 @@ namespace Backend.Data
         // Brain Gym
         public DbSet<Game> Games { get; set; } = null!;
         public DbSet<GameQuestion> GameQuestions { get; set; } = null!;
-        public DbSet<ComplexityQuestion> ComplexityQuestions { get; set; } = null!;
         public DbSet<UserGameScore> UserGameScores { get; set; } = null!;
         public DbSet<BrainGymHistory> BrainGymHistory { get; set; } = null!;
     }

@@ -88,13 +88,13 @@ export default function About() {
         </div>
         <span className="inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-1.5 text-xs font-semibold tracking-wider text-sky-400 uppercase mb-6">
           <span className="h-2 w-2 rounded-full bg-sky-400 animate-pulse" />
-          About CodePulse
+          About BRUHCODE
         </span>
         <h1 className="text-4xl md:text-6xl font-black tracking-tight text-white mb-6 leading-tight">
           All contests. <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-emerald-400 italic font-medium">One place.</span>
         </h1>
         <p className="max-w-2xl text-base md:text-lg text-slate-400 leading-relaxed mb-8">
-          CodePulse aggregates coding contests from all major competitive programming platforms into a single, real-time dashboard. Plan your calendar, track your stats, and practice with your team.
+          BRUHCODE aggregates coding contests from all major competitive programming platforms into a single, real-time dashboard. Plan your calendar, track your stats, and practice with your team.
         </p>
         <div className="flex gap-4">
           <Link
@@ -125,7 +125,7 @@ export default function About() {
           <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest block mb-3">The Mission</span>
           <h2 className="text-xl font-bold text-white mb-3">Unified Coordination</h2>
           <p className="text-sm text-slate-400 leading-relaxed">
-            CodePulse unifies the entire workflow. By pulling schedules in real time, normalizing timeline offsets, and offering collaborative practice rooms with synced timers and spoiler-protected chats, we make sure the only thing standing between you and the podium is your coding skills.
+            BRUHCODE unifies the entire workflow. By pulling schedules in real time, normalizing timeline offsets, and offering collaborative practice rooms with synced timers and spoiler-protected chats, we make sure the only thing standing between you and the podium is your coding skills.
           </p>
         </div>
       </motion.section>
@@ -264,9 +264,9 @@ export default function About() {
         </div>
         <div className="md:col-span-2 text-center md:text-left">
           <span className="text-xs font-bold text-sky-400 uppercase tracking-widest block mb-2">Creator Note</span>
-          <h2 className="text-lg font-bold text-white mb-2">Why I built CodePulse</h2>
+          <h2 className="text-lg font-bold text-white mb-2">Why I built BRUHCODE</h2>
           <p className="text-xs text-slate-400 leading-relaxed mb-4">
-            Built by a competitive programming enthusiast who was tired of missing rounds across platforms. Managing multiple tabs, calendars, and timezone conversions got in the way of practicing. CodePulse was built to coordinate competitive rounds in one spot, helping teams practice together.
+            Built by a competitive programming enthusiast who was tired of missing rounds across platforms. Managing multiple tabs, calendars, and timezone conversions got in the way of practicing. BRUHCODE was built to coordinate competitive rounds in one spot, helping teams practice together.
           </p>
           <span className="text-xs font-bold text-slate-300 block">— Shamiul Islam Riyad, Creator</span>
         </div>
@@ -320,7 +320,7 @@ export default function About() {
           <p className="text-[11px] text-slate-400">Contribute, fork, or view the codebase</p>
         </a>
         <a
-          href="mailto:feedback@codepulse.com"
+          href="mailto:feedback@bruhcode.com"
           className="p-6 rounded-xl border border-white/5 bg-slate-900/20 hover:bg-slate-900/40 hover:border-sky-500/20 text-center transition-all"
         >
           <span className="text-xl block mb-2">📬</span>

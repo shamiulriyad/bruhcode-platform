@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 
 /*
  * Shared "<+>" brand mark — two code-bracket chevrons with a plus fused
- * in the gap between them. Reads as "CodePulse" without needing the
+ * in the gap between them. Reads as "BRUHCODE" without needing the
  * wordmark alongside it. Same sky-400 → emerald-400 gradient used for
  * the CP badge in Navbar.jsx.
  *

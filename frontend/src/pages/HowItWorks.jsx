@@ -34,7 +34,7 @@ const STEPS = [
 const FAQS = [
   {
     q: 'Is it free?',
-    a: 'Yes, CodePulse’s core features are completely free to use — contest tracking, the calendar, practice rooms, and Brain Gym all included.',
+    a: 'Yes, BRUHCODE’s core features are completely free to use — contest tracking, the calendar, practice rooms, and Brain Gym all included.',
   },
   {
     q: 'Which platforms are supported?',
@@ -217,7 +217,7 @@ export default function HowItWorks() {
             Walkthrough
           </span>
           <h1 className="text-4xl md:text-6xl font-black tracking-tight text-white mb-6 leading-tight">
-            How CodePulse Works
+            How BRUHCODE Works
           </h1>
           <p className="max-w-2xl text-base md:text-lg text-slate-400 leading-relaxed">
             A quick look at the full journey — from creating your account to sharpening your skills between contests.

@@ -7,8 +7,8 @@ import { useScrollSpy, TableOfContents, PolicySection, BackToTopButton } from '.
    Update `lastUpdated` any time the terms text changes below. */
 const TERMS_CONFIG = {
   lastUpdated: '2026-07-06',
-  companyName: 'CodePulse',
-  contactEmail: 'legal@codepulse.com',
+  companyName: 'BRUHCODE',
+  contactEmail: 'legal@bruhcode.com',
   governingLaw: '[Placeholder — e.g. the laws of Bangladesh]',
 };
 

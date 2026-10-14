@@ -557,7 +557,7 @@ export default function ProfileSettings() {
             <main className="space-y-6">
               {/* masthead */}
               <div className="ed-masthead">
-                <span className="ed-masthead__brand">CODE<b>PULSE</b></span>
+                <span className="ed-masthead__brand">BRUH<b>CODE</b></span>
                 <span className="ed-masthead__edition">
                   <span>Account Edition</span>
                   <span>{todayStamp}</span>

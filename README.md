@@ -53,7 +53,7 @@
 | Frontend | React 19, React Router, Tailwind CSS, Framer Motion, FullCalendar, TanStack Query, Zustand, Axios |
 | Backend | ASP.NET Core (.NET 10) Web API, SignalR, JWT Bearer auth, built-in rate limiting |
 | Database | PostgreSQL with Entity Framework Core (Npgsql) |
-| Contest data | Codeforces API, LeetCode GraphQL, CodeChef API, AtCoder pages, Playwright (GeeksforGeeks) |
+| Contest data | Codeforces API, LeetCode GraphQL, CodeChef API, GeeksforGeeks API, AtCoder pages |
 | Email | MailKit (SMTP) |
 | Tests | xUnit with the EF Core in-memory provider |
 
@@ -109,12 +109,6 @@ dotnet run --project Backend
 
 The API starts at `http://localhost:5163`. On first run it creates the database tables, then fetches contests and seeds the Brain Gym questions in the background.
 
-GeeksforGeeks contests are scraped with Playwright. To enable them, install its browser once after the first build:
-
-```bash
-pwsh Backend/bin/Debug/net10.0/playwright.ps1 install chromium
-```
-
 ### 3. Run the frontend
 
 ```bash
@@ -126,7 +120,7 @@ npm start
 The app opens at `http://localhost:3000`. It reads the API address from `frontend/.env`:
 
 ```
-REACT_APP_API_URL=http://localhost:5163
+REACT_APP_BRUHCODE_API_URL=http://localhost:5163
 ```
 
 ### 4. Run the tests

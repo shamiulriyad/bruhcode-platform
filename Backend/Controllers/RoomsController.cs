@@ -384,7 +384,7 @@ namespace Backend.Controllers
         [HttpGet("{id}/leaderboard")]
         public async Task<IActionResult> GetLeaderboard(int id)
         {
-            var leaderboard = await BuildLeaderboardAsync(id);
+            var leaderboard = await RoomLeaderboard.BuildAsync(_db, id);
             return Ok(leaderboard);
         }
 
@@ -480,38 +480,29 @@ namespace Backend.Controllers
 
             if (room == null) return NotFound();
 
-            var leaderboard = await BuildLeaderboardAsync(id);
+            var leaderboard = await RoomLeaderboard.BuildAsync(_db, id);
 
             // Per-problem solve rates
-            var problemStats = new List<object>();
-            foreach (var prob in room.Problems)
+            var progress = await _db.RoomProgress.Where(p => p.RoomId == id).ToListAsync();
+            var totalMembers = room.Members.Count;
+            var problemStats = room.Problems.Select(prob =>
             {
-                var progresses = await _db.RoomProgress
-                    .Where(p => p.RoomId == id && p.RoomProblemId == prob.Id)
-                    .ToListAsync();
-
-                var solvedCount = progresses.Count(p => p.Status == SolveStatus.Solved);
-                var totalAttempts = progresses.Sum(p => p.Attempts);
-                var totalMembers = room.Members.Count;
+                var forProblem = progress.Where(p => p.RoomProblemId == prob.Id).ToList();
+                var solvedCount = forProblem.Count(p => p.Status == SolveStatus.Solved);
                 var solveRate = totalMembers > 0 ? (double)solvedCount / totalMembers * 100 : 0;
-
-                problemStats.Add(new
+                return new
                 {
                     prob.Id,
                     prob.ProblemIndex,
                     prob.ProblemName,
                     solvedCount,
-                    totalAttempts,
+                    totalAttempts = forProblem.Sum(p => p.Attempts),
                     solveRate = Math.Round(solveRate, 1),
-                });
-            }
+                };
+            }).ToList();
 
             // Weakest problem (lowest solve rate)
-            var weakest = problemStats.OrderBy(p =>
-            {
-                var rate = (double?)p.GetType().GetProperty("solveRate")?.GetValue(p) ?? 100;
-                return rate;
-            }).FirstOrDefault();
+            var weakest = problemStats.OrderBy(p => p.solveRate).FirstOrDefault();
 
             return Ok(new
             {
@@ -539,66 +530,9 @@ namespace Backend.Controllers
 
         // ─── Helpers ───────────────────────────────────────────────────
 
-        private async Task<List<object>> BuildLeaderboardAsync(int roomId)
-        {
-            var members = await _db.RoomMembers
-                .Where(m => m.RoomId == roomId)
-                .Include(m => m.User)
-                .ToListAsync();
-
-            var room = await _db.Rooms.FindAsync(roomId);
-
-            var board = new List<object>();
-
-            foreach (var member in members)
-            {
-                var progresses = await _db.RoomProgress
-                    .Where(p => p.RoomId == roomId && p.UserId == member.UserId)
-                    .ToListAsync();
-
-                var solvedCount = progresses.Count(p => p.Status == SolveStatus.Solved);
-                var totalTimeSec = progresses
-                    .Where(p => p.Status == SolveStatus.Solved && p.SolvedAt != null && room != null)
-                    .Sum(p => (p.SolvedAt!.Value - room!.StartTime).TotalSeconds);
-
-                board.Add(new
-                {
-                    userId = member.UserId,
-                    displayName = member.User?.DisplayName ?? "",
-                    profilePic = member.User?.ProfilePictureUrl,
-                    solvedCount,
-                    totalTimeSec = Math.Round(totalTimeSec, 0),
-                    attempts = progresses.Sum(p => p.Attempts),
-                });
-            }
-
-            // Sort by solved count desc, then total time asc
-            var sorted = board
-                .OrderByDescending(b => (int)(b.GetType().GetProperty("solvedCount")?.GetValue(b) ?? 0))
-                .ThenBy(b => (double)(b.GetType().GetProperty("totalTimeSec")?.GetValue(b) ?? 0))
-                .Select((b, i) =>
-                {
-                    // Add rank via anonymous type rebuild
-                    var type = b.GetType();
-                    return new
-                    {
-                        rank = i + 1,
-                        userId = (int)(type.GetProperty("userId")?.GetValue(b) ?? 0),
-                        displayName = (string)(type.GetProperty("displayName")?.GetValue(b) ?? ""),
-                        profilePic = (string?)(type.GetProperty("profilePic")?.GetValue(b)),
-                        solvedCount = (int)(type.GetProperty("solvedCount")?.GetValue(b) ?? 0),
-                        totalTimeSec = (double)(type.GetProperty("totalTimeSec")?.GetValue(b) ?? 0.0),
-                        attempts = (int)(type.GetProperty("attempts")?.GetValue(b) ?? 0),
-                    };
-                })
-                .ToList<object>();
-
-            return sorted;
-        }
-
         private async Task BroadcastLeaderboardAsync(int roomId)
         {
-            var leaderboard = await BuildLeaderboardAsync(roomId);
+            var leaderboard = await RoomLeaderboard.BuildAsync(_db, roomId);
             await _hubContext.Clients
                 .Group($"room_{roomId}")
                 .SendAsync("LeaderboardUpdate", leaderboard);

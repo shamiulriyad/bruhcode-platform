@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { roomAPI, contestAPI } from '../api';
-import { useAuth } from '../context/AuthContext';
 import WaitingIllustration from '../components/rooms/WaitingIllustration';
 
 /* ─── Platform badge colors ────────────────────────────────────── */
@@ -23,7 +22,6 @@ const STATUS_CFG = {
 };
 
 export default function PracticeRooms() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);

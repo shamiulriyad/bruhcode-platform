@@ -1,14 +1,13 @@
-import './index.css';
 import './App.css';
 import React from 'react';
-import { BrowserRouter, Navigate, Routes, Route, useLocation } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter, Navigate, Routes, Route, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ScrollToTop from './components/ScrollToTop';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { roomAPI } from './api';
 
 import Home from './pages/Home';
 import Platforms from './pages/Platforms';
@@ -48,11 +47,9 @@ function RequireAuth({ children }) {
   return children;
 }
 
-const queryClient = new QueryClient();
-
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       <AuthProvider>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <ScrollToTop />
@@ -102,7 +99,7 @@ function App() {
         </BrowserRouter>
       </AuthProvider>
       <Toaster />
-    </QueryClientProvider>
+    </>
   );
 }
 
@@ -110,11 +107,10 @@ function App() {
  * Handles /rooms/join/:code — joins the room and redirects to lobby.
  */
 function JoinRedirect() {
-  const { code } = require('react-router-dom').useParams();
-  const navigate = require('react-router-dom').useNavigate();
+  const { code } = useParams();
+  const navigate = useNavigate();
 
   React.useEffect(() => {
-    const { roomAPI } = require('./api');
     roomAPI.joinByCode(code)
       .then(({ data }) => navigate(`/rooms/${data.id}/lobby`, { replace: true }))
       .catch(() => navigate('/rooms', { replace: true }));

@@ -73,7 +73,7 @@ function FooterBrand({ reduceMotion }) {
       <Link to="/" className="fp-logorow">
         <Logo size={40} />
         <div className="fp-logotype">
-          <div className="fp-logotype-name">CodePulse</div>
+          <div className="fp-logotype-name">BRUHCODE</div>
           <div className="fp-logotype-sub">Contest Tracker</div>
         </div>
       </Link>
@@ -277,7 +277,7 @@ function FooterBottomBar({ reduceMotion }) {
   return (
     <div className="fp-bottom">
       <p className="fp-copy">
-        © <em>{currentYear}</em> CodePulse. All rights reserved.
+        © <em>{currentYear}</em> BRUHCODE. All rights reserved.
       </p>
       <FooterSocialRow reduceMotion={reduceMotion} />
       <p className="fp-love">

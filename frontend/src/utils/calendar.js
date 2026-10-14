@@ -20,7 +20,7 @@ export function createICS(contest) {
   const ics = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//CodePulse//Contest Calendar//EN',
+    'PRODID:-//BRUHCODE//Contest Calendar//EN',
     'BEGIN:VEVENT',
     `UID:${uid}`,
     `DTSTAMP:${dtstamp}`,
@@ -68,4 +68,6 @@ export function addToCalendar(contest) {
   }
 }
 
-export default { addToCalendar, createICS, downloadICS, openGoogleCalendar };
+const calendarUtils = { addToCalendar, createICS, downloadICS, openGoogleCalendar };
+
+export default calendarUtils;

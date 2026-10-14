@@ -1,8 +1,7 @@
 import * as signalR from '@microsoft/signalr';
+import { API_URL } from '../api';
 
-const HUB_URL = process.env.REACT_APP_API_URL
-  ? `${process.env.REACT_APP_API_URL}/hubs/room`
-  : 'http://localhost:5163/hubs/room';
+const HUB_URL = `${API_URL}/hubs/room`;
 
 let connection = null;
 let fallbackPolling = false;

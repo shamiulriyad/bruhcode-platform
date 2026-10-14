@@ -1,5 +1,6 @@
 using Backend.Data;
 using Backend.Models;
+using Backend.Services;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -238,29 +239,25 @@ namespace Backend.Tests
             );
             await db.SaveChangesAsync();
 
-            // Build leaderboard manually (same logic as controller)
-            var allProgress = await db.RoomProgress.Where(p => p.RoomId == room.Id).ToListAsync();
+            db.RoomMembers.AddRange(
+                new RoomMember { RoomId = room.Id, UserId = user3.Id },
+                new RoomMember { RoomId = room.Id, UserId = user2.Id },
+                new RoomMember { RoomId = room.Id, UserId = user1.Id }
+            );
+            await db.SaveChangesAsync();
 
-            var rankings = new[] { user1, user2, user3 }
-                .Select(u =>
-                {
-                    var progs = allProgress.Where(p => p.UserId == u.Id).ToList();
-                    var solvedCount = progs.Count(p => p.Status == SolveStatus.Solved);
-                    var totalTime = progs
-                        .Where(p => p.Status == SolveStatus.Solved && p.SolvedAt != null)
-                        .Sum(p => (p.SolvedAt!.Value - roomStart).TotalSeconds);
-                    return new { userId = u.Id, name = u.DisplayName, solvedCount, totalTime };
-                })
-                .OrderByDescending(x => x.solvedCount)
-                .ThenBy(x => x.totalTime)
-                .ToList();
+            var rankings = await RoomLeaderboard.BuildAsync(db, room.Id);
 
             // user1 should be #1 (2 solved, 75min < 90min)
-            Assert.Equal(user1.Id, rankings[0].userId);
+            Assert.Equal(user1.Id, rankings[0].UserId);
+            Assert.Equal(1, rankings[0].Rank);
+            Assert.Equal(75 * 60, rankings[0].TotalTimeSec);
+            Assert.Equal(3, rankings[0].Attempts);
             // user2 should be #2 (2 solved, but slower)
-            Assert.Equal(user2.Id, rankings[1].userId);
+            Assert.Equal(user2.Id, rankings[1].UserId);
             // user3 should be #3 (only 1 solved)
-            Assert.Equal(user3.Id, rankings[2].userId);
+            Assert.Equal(user3.Id, rankings[2].UserId);
+            Assert.Equal(1, rankings[2].SolvedCount);
         }
     }
 }

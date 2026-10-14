@@ -18,7 +18,7 @@ const plusVariants = {
  * mousemove + spring-smoothed motion values — no extra tilt library
  * needed since framer-motion already covers it).
  *
- * `showWordmark` renders the "CodePulse" lockup beside the mark using
+ * `showWordmark` renders the "BRUHCODE" lockup beside the mark using
  * the same sky→emerald gradient text already used elsewhere (About.jsx
  * hero heading, BrainGymHome title).
  */
@@ -116,8 +116,8 @@ export default function LogoHero({ size = 96, showWordmark = false, className = 
           className="flex flex-col"
         >
           <span className="text-3xl md:text-5xl font-black tracking-tight">
-            <span className="text-white">Code</span>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-emerald-400">Pulse</span>
+            <span className="text-white">BRUH</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-emerald-400">CODE</span>
           </span>
         </motion.div>
       )}

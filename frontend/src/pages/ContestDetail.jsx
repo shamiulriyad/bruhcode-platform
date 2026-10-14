@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import api, { userAPI } from '../api';
+import { contestAPI, userAPI } from '../api';
 import { useAuth } from '../context/AuthContext';
 import ContestCard from '../components/ContestCard';
 
@@ -13,20 +13,14 @@ export default function ContestDetail(){
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchContest();
+    contestAPI.getById(id)
+      .then((res) => setContest(res.data))
+      .catch((err) => {
+        setError('Failed to load contest details');
+        console.error(err);
+      })
+      .finally(() => setLoading(false));
   }, [id]);
-
-  async function fetchContest() {
-    try {
-      const res = await api.get(`/api/contests/${id}`);
-      setContest(res.data);
-    } catch (err) {
-      setError('Failed to load contest details');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const saveContest = async (contestId) => {
     try {

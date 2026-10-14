@@ -85,7 +85,7 @@ namespace Backend.Controllers
             {
                 await _emailSender.SendEmailAsync(
                     adminEmail,
-                    $"[CodePulse Contact] {subject} from {entry.Name}",
+                    $"[BRUHCODE Contact] {subject} from {entry.Name}",
                     $"From: {entry.Name} <{entry.Email}>\nSubject: {subject}\n\n{entry.Message}"
                 );
             }
@@ -98,8 +98,8 @@ namespace Backend.Controllers
             {
                 await _emailSender.SendEmailAsync(
                     entry.Email,
-                    "We received your message — CodePulse",
-                    $"Hi {entry.Name},\n\nThanks for reaching out! We've received your message and will get back to you within 2-3 business days.\n\n— The CodePulse Team"
+                    "We received your message — BRUHCODE",
+                    $"Hi {entry.Name},\n\nThanks for reaching out! We've received your message and will get back to you within 2-3 business days.\n\n— The BRUHCODE Team"
                 );
             }
             catch (Exception ex)
