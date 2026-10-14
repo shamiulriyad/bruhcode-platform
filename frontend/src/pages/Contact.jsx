@@ -4,8 +4,26 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { contactAPI } from '../api';
 
 const SUBJECTS = ['General Question', 'Bug Report', 'Feature Request', 'Partnership', 'Other'];
-
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MESSAGE_MAX = 2000;
+const REPO_URL = 'https://github.com/shamiulriyad/bruhcode-platform';
+const EMPTY_FORM = { name: '', email: '', subject: SUBJECTS[0], message: '', website: '' };
+
+const ICONS = {
+  github: 'M9 19c-4 1.4-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21',
+  book: 'M4 5.5A1.5 1.5 0 0 1 5.5 4H19v14H5.5A1.5 1.5 0 0 0 4 19.5v-14ZM4 19.5A1.5 1.5 0 0 0 5.5 21H19v-3',
+  clock: 'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
+  arrow: 'M5 12h14M13 6l6 6-6 6',
+  check: 'M5 13l4 4L19 7',
+};
+
+function Glyph({ name, className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d={ICONS[name]} />
+    </svg>
+  );
+}
 
 /* ─── Success confirmation shown in place of the form ─────────────── */
 function SuccessState({ onReset }) {
@@ -14,27 +32,22 @@ function SuccessState({ onReset }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
-      className="flex flex-col items-center text-center p-10 rounded-2xl border border-emerald-500/20 bg-emerald-500/5"
+      className="flex min-h-[460px] flex-col items-center justify-center text-center"
+      role="status"
     >
-      <motion.div
+      <motion.span
         initial={{ scale: 0.4, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.1 }}
-        className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-5"
+        className="ct-success-icon"
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8">
-          <path d="M5 13l4 4L19 7" />
-        </svg>
-      </motion.div>
-      <h3 className="text-xl font-bold text-white mb-2">Message sent!</h3>
-      <p className="text-sm text-slate-400 max-w-sm leading-relaxed mb-6">
-        Thanks for reaching out! We'll get back to you within 2-3 business days.
+        <Glyph name="check" className="h-8 w-8" />
+      </motion.span>
+      <h2 className="ct-h2 mt-7">Message sent</h2>
+      <p className="ct-body mt-3 max-w-sm">
+        Thanks for reaching out. We&apos;ll reply to your email within 2–3 business days.
       </p>
-      <button
-        type="button"
-        onClick={onReset}
-        className="text-xs font-bold text-sky-400 hover:text-sky-300 transition-colors"
-      >
+      <button type="button" onClick={onReset} className="ct-link mt-8">
         Send another message
       </button>
     </motion.div>
@@ -43,7 +56,7 @@ function SuccessState({ onReset }) {
 
 /* ─── Main contact form ────────────────────────────────────────────── */
 function ContactForm() {
-  const [form, setForm] = useState({ name: '', email: '', subject: SUBJECTS[0], message: '', website: '' });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState('idle'); // idle | loading | success
   const [serverError, setServerError] = useState('');
@@ -52,7 +65,7 @@ function ContactForm() {
 
   const validate = () => {
     const next = {};
-    if (!form.name.trim()) next.name = 'Name is required.';
+    if (!form.name.trim()) next.name = 'Please tell us your name.';
     if (!form.email.trim() || !EMAIL_RE.test(form.email)) next.email = 'Enter a valid email address.';
     if (form.message.trim().length < 10) next.message = 'Message must be at least 10 characters.';
     setErrors(next);
@@ -79,196 +92,279 @@ function ContactForm() {
     return (
       <SuccessState
         onReset={() => {
-          setForm({ name: '', email: '', subject: SUBJECTS[0], message: '', website: '' });
+          setForm(EMPTY_FORM);
+          setErrors({});
           setStatus('idle');
         }}
       />
     );
   }
 
+  const fieldProps = (name) => ({
+    id: `contact-${name}`,
+    value: form[name],
+    onChange: update(name),
+    'aria-invalid': errors[name] ? true : undefined,
+    'aria-describedby': errors[name] ? `contact-${name}-error` : undefined,
+    className: errors[name] ? 'ct-input has-error' : 'ct-input',
+  });
+
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
+      <div>
+        <h2 className="ct-h2">Send a message</h2>
+        <p className="ct-body-sm mt-2">All fields are required.</p>
+      </div>
+
       {serverError && (
-        <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-xs text-red-400">
-          {serverError}
-        </div>
+        <div role="alert" className="ct-alert">{serverError}</div>
       )}
 
-      {/* Honeypot — hidden from sighted users, real browsers leave it empty; bots often fill every field */}
+      {/* Honeypot — hidden from people, real browsers leave it empty; bots often fill every field */}
       <div style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }} aria-hidden="true">
         <label htmlFor="website">Website</label>
-        <input
-          id="website"
-          name="website"
-          type="text"
-          tabIndex={-1}
-          autoComplete="off"
-          value={form.website}
-          onChange={update('website')}
-        />
+        <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" value={form.website} onChange={update('website')} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div>
-          <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Name</label>
-          <input
-            type="text"
-            value={form.name}
-            onChange={update('name')}
-            placeholder="Your name"
-            className="w-full rounded-lg border border-white/10 bg-slate-900/40 px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all focus:border-sky-500/40 focus:shadow-[0_0_0_3px_rgba(56,189,248,0.12),0_0_20px_rgba(56,189,248,0.08)]"
-          />
-          {errors.name && <p className="mt-1.5 text-xs text-red-400">{errors.name}</p>}
+          <label htmlFor="contact-name" className="ct-label">Name</label>
+          <input type="text" autoComplete="name" placeholder="Your name" {...fieldProps('name')} />
+          {errors.name && <p id="contact-name-error" className="ct-error">{errors.name}</p>}
         </div>
         <div>
-          <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Email</label>
-          <input
-            type="email"
-            value={form.email}
-            onChange={update('email')}
-            placeholder="you@example.com"
-            className="w-full rounded-lg border border-white/10 bg-slate-900/40 px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all focus:border-sky-500/40 focus:shadow-[0_0_0_3px_rgba(56,189,248,0.12),0_0_20px_rgba(56,189,248,0.08)]"
-          />
-          {errors.email && <p className="mt-1.5 text-xs text-red-400">{errors.email}</p>}
+          <label htmlFor="contact-email" className="ct-label">Email</label>
+          <input type="email" autoComplete="email" placeholder="you@example.com" {...fieldProps('email')} />
+          {errors.email && <p id="contact-email-error" className="ct-error">{errors.email}</p>}
         </div>
       </div>
 
-      <div>
-        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Subject</label>
-        <select
-          value={form.subject}
-          onChange={update('subject')}
-          className="w-full rounded-lg border border-white/10 bg-slate-900/40 px-4 py-2.5 text-sm text-white outline-none transition-all focus:border-sky-500/40 focus:shadow-[0_0_0_3px_rgba(56,189,248,0.12),0_0_20px_rgba(56,189,248,0.08)]"
-        >
+      <fieldset>
+        <legend className="ct-label">Topic</legend>
+        <div className="flex flex-wrap gap-2">
           {SUBJECTS.map((s) => (
-            <option key={s} value={s} className="bg-slate-900">{s}</option>
+            <label key={s} className={form.subject === s ? 'ct-pill is-active' : 'ct-pill'}>
+              <input
+                type="radio"
+                name="subject"
+                value={s}
+                checked={form.subject === s}
+                onChange={update('subject')}
+                className="sr-only"
+              />
+              {s}
+            </label>
           ))}
-        </select>
-      </div>
+        </div>
+      </fieldset>
 
       <div>
-        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Message</label>
-        <textarea
-          value={form.message}
-          onChange={update('message')}
-          rows={5}
-          placeholder="Tell us what's on your mind..."
-          className="w-full rounded-lg border border-white/10 bg-slate-900/40 px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all resize-none focus:border-sky-500/40 focus:shadow-[0_0_0_3px_rgba(56,189,248,0.12),0_0_20px_rgba(56,189,248,0.08)]"
-        />
-        {errors.message && <p className="mt-1.5 text-xs text-red-400">{errors.message}</p>}
+        <div className="flex items-baseline justify-between">
+          <label htmlFor="contact-message" className="ct-label">Message</label>
+          <span className="ct-mono text-xs text-slate-600">{form.message.length}/{MESSAGE_MAX}</span>
+        </div>
+        <textarea rows={6} maxLength={MESSAGE_MAX} placeholder="Tell us what's on your mind…" {...fieldProps('message')} />
+        {errors.message && <p id="contact-message-error" className="ct-error">{errors.message}</p>}
       </div>
 
-      <button
-        type="submit"
-        disabled={status === 'loading'}
-        className="self-start inline-flex items-center justify-center gap-2 rounded-full bg-sky-500 hover:bg-sky-400 disabled:opacity-70 disabled:cursor-default px-8 py-3 text-sm font-bold text-slate-950 transition-colors shadow-[0_0_15px_rgba(56,189,248,0.3)] hover:shadow-[0_0_20px_rgba(56,189,248,0.4)] min-w-[140px]"
-      >
-        <AnimatePresence mode="wait" initial={false}>
-          {status === 'loading' ? (
-            <motion.span
-              key="loading"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="inline-block w-4 h-4 rounded-full border-2 border-slate-950/25 border-t-slate-950 animate-spin"
-            />
-          ) : (
-            <motion.span key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              Send Message
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+        <p className="ct-body-sm max-w-xs">
+          We only use your email to reply. See our{' '}
+          <Link to="/privacy-policy" className="text-sky-300 hover:text-sky-200">privacy policy</Link>.
+        </p>
+        <button type="submit" disabled={status === 'loading'} className="ct-btn-primary">
+          <AnimatePresence mode="wait" initial={false}>
+            {status === 'loading' ? (
+              <motion.span key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-950/25 border-t-slate-950" />
+                Sending…
+              </motion.span>
+            ) : (
+              <motion.span key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
+                Send message <Glyph name="arrow" className="h-4 w-4" />
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
+      </div>
     </form>
   );
 }
 
-/* ─── Side panel with alternative ways to reach out ────────────────── */
-function AlternativeContactPanel() {
-  return (
-    <div className="flex flex-col gap-4">
-      <a
-        href="mailto:feedback@bruhcode.com"
-        className="p-5 rounded-xl border border-white/5 bg-slate-900/20 hover:bg-slate-900/40 hover:border-sky-500/20 transition-all"
-      >
-        <span className="text-lg block mb-2">📬</span>
-        <h4 className="text-sm font-bold text-white mb-1">Email Us</h4>
-        <p className="text-xs text-slate-400">feedback@bruhcode.com</p>
-      </a>
-
-      <a
-        href="https://github.com/riyad"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="p-5 rounded-xl border border-white/5 bg-slate-900/20 hover:bg-slate-900/40 hover:border-sky-500/20 transition-all"
-      >
-        <span className="text-lg block mb-2">💻</span>
-        <h4 className="text-sm font-bold text-white mb-1">GitHub</h4>
-        <p className="text-xs text-slate-400">Report bugs or contribute on the repo</p>
-      </a>
-
-      <div className="p-5 rounded-xl border border-white/5 bg-slate-900/20">
-        <span className="text-lg block mb-2">⏱️</span>
-        <h4 className="text-sm font-bold text-white mb-1">Response Time</h4>
-        <p className="text-xs text-slate-400">We typically reply within 2-3 business days</p>
-      </div>
-
-      <div className="p-5 rounded-xl border border-white/5 bg-slate-900/10">
-        <p className="text-xs text-slate-400 leading-relaxed">
-          Looking for quick answers? Check{' '}
-          <Link to="/how-it-works" className="text-sky-400 hover:text-sky-300 font-semibold">How It Works</Link>
-          {' '}or our{' '}
-          <Link to="/how-it-works#faq" className="text-sky-400 hover:text-sky-300 font-semibold">FAQ</Link>.
-        </p>
-      </div>
-    </div>
-  );
-}
+/* ─── Other ways to get help ───────────────────────────────────────── */
+const CHANNELS = [
+  {
+    icon: 'github',
+    title: 'Report a bug on GitHub',
+    text: 'Open an issue with steps to reproduce — the fastest way to get a bug fixed.',
+    href: `${REPO_URL}/issues`,
+    external: true,
+  },
+  {
+    icon: 'book',
+    title: 'Read the FAQ',
+    text: 'Answers to common questions about contests, rooms and Brain Gym.',
+    to: '/how-it-works#faq',
+  },
+];
 
 export default function Contact() {
-  const shouldReduceMotion = useReducedMotion();
-  const heroVariants = {
-    hidden: { opacity: 0, y: shouldReduceMotion ? 0 : 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
-  };
+  const reduce = useReducedMotion();
+  const enter = (delay = 0) => ({
+    initial: reduce ? false : { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.6, delay, ease: [0.16, 1, 0.3, 1] },
+  });
 
   return (
-    <div style={{ minHeight: '100vh', background: '#060612' }}>
-      <div className="mx-auto max-w-5xl px-6 py-12 md:py-20 text-slate-200">
+    <div className="ct-root">
+      <style>{STYLES}</style>
+      <div className="ct-grid-bg" aria-hidden="true" />
 
-        <motion.section
-          initial="hidden"
-          animate="visible"
-          variants={heroVariants}
-          className="text-center mb-16 flex flex-col items-center"
-        >
-          <span className="inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-1.5 text-xs font-semibold tracking-wider text-sky-400 uppercase mb-6">
-            <span className="h-2 w-2 rounded-full bg-sky-400 animate-pulse" />
-            Contact
-          </span>
-          <h1 className="text-4xl md:text-6xl font-black tracking-tight text-white mb-6 leading-tight">
-            Get in Touch
+      <div className="ct-wrap relative grid grid-cols-1 gap-14 py-20 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20 lg:py-28">
+        <motion.div {...enter()}>
+          <p className="ct-eyebrow"><span className="ct-dot" /> Contact</p>
+          <h1 className="ct-display mt-6">
+            Let&apos;s talk.
           </h1>
-          <p className="max-w-xl text-base md:text-lg text-slate-400 leading-relaxed">
-            Questions, feedback, or found a bug? We'd love to hear from you.
+          <p className="ct-lead mt-6 max-w-md">
+            Questions, feedback or a bug to report? Send us a message — a real person reads every one.
           </p>
-        </motion.section>
 
-        <motion.div
-          initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: 'easeOut', delay: 0.1 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-8"
-        >
-          <div className="md:col-span-2 p-8 rounded-2xl border border-white/5 bg-slate-900/30">
-            <ContactForm />
+          <div className="ct-response mt-10">
+            <Glyph name="clock" className="h-5 w-5 text-emerald-300" />
+            <span>We usually reply within <strong className="font-semibold text-slate-100">2–3 business days</strong>.</span>
           </div>
-          <div className="md:col-span-1">
-            <AlternativeContactPanel />
-          </div>
+
+          <ul className="mt-10 grid gap-3">
+            {CHANNELS.map((c) => {
+              const inner = (
+                <>
+                  <span className="ct-channel-icon"><Glyph name={c.icon} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-slate-100">{c.title}</span>
+                    <span className="ct-body-sm mt-1 block">{c.text}</span>
+                  </span>
+                  <Glyph name="arrow" className="ct-channel-arrow h-4 w-4" />
+                </>
+              );
+              return (
+                <li key={c.title}>
+                  {c.external ? (
+                    <a href={c.href} target="_blank" rel="noopener noreferrer" className="ct-channel">{inner}</a>
+                  ) : (
+                    <Link to={c.to} className="ct-channel">{inner}</Link>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </motion.div>
 
+        <motion.div {...enter(0.1)} className="ct-card">
+          <div className="ct-card-inner">
+            <ContactForm />
+          </div>
+        </motion.div>
       </div>
     </div>
   );
 }
+
+/* ─── Styles ──────────────────────────────────────────────────────── */
+
+const STYLES = `
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+.ct-root {
+  --ct-line: rgba(255,255,255,0.07);
+  --ct-line-strong: rgba(255,255,255,0.12);
+  position: relative; overflow: hidden; min-height: 100vh;
+  background: #06070c; color: #cbd5e1;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.ct-wrap { width: min(100% - 32px, 1160px); margin-inline: auto; }
+.ct-grid-bg {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(var(--ct-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ct-line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 70% 55% at 30% 20%, #000 25%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 30% 20%, #000 25%, transparent 75%);
+}
+.ct-grid-bg::after {
+  content: ''; position: absolute; inset: 0 30% auto 0; height: 60%;
+  background: radial-gradient(closest-side, rgba(56,189,248,0.13), transparent);
+  filter: blur(24px);
+}
+
+.ct-eyebrow {
+  display: flex; align-items: center; gap: 10px;
+  font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.22em;
+  text-transform: uppercase; color: #7dd3fc;
+}
+.ct-dot { width: 6px; height: 6px; border-radius: 99px; background: #34d399; box-shadow: 0 0 12px #34d399; }
+.ct-display { font-weight: 700; color: #f8fafc; font-size: clamp(42px, 5.4vw, 68px); line-height: 1.04; letter-spacing: -0.025em; }
+.ct-h2 { font-weight: 600; color: #f1f5f9; font-size: 22px; letter-spacing: -0.02em; }
+.ct-lead { font-size: 18px; line-height: 1.7; color: #94a3b8; }
+.ct-body { font-size: 16px; line-height: 1.7; color: #94a3b8; }
+.ct-body-sm { font-size: 14px; line-height: 1.6; color: #7c879b; }
+.ct-mono { font-family: 'JetBrains Mono', monospace; }
+
+.ct-response { display: inline-flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 14px; border: 1px solid var(--ct-line); background: rgba(255,255,255,0.02); font-size: 15px; color: #94a3b8; }
+
+.ct-channel {
+  display: flex; align-items: center; gap: 16px; padding: 18px; border-radius: 18px;
+  border: 1px solid var(--ct-line); background: rgba(255,255,255,0.015);
+  transition: border-color .2s ease, background .2s ease;
+}
+.ct-channel:hover { border-color: var(--ct-line-strong); background: rgba(255,255,255,0.035); }
+.ct-channel-icon { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: 14px; color: #7dd3fc; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.18); }
+.ct-channel-arrow { color: #475569; transition: transform .2s ease, color .2s ease; }
+.ct-channel:hover .ct-channel-arrow { transform: translateX(3px); color: #7dd3fc; }
+
+.ct-card { position: relative; align-self: start; padding: 1px; border-radius: 28px; background: linear-gradient(140deg, rgba(56,189,248,0.4), rgba(255,255,255,0.06) 35%, rgba(255,255,255,0.04) 70%, rgba(52,211,153,0.35)); box-shadow: 0 40px 120px -50px rgba(56,189,248,0.4); }
+.ct-card-inner { border-radius: 27px; padding: clamp(24px, 4vw, 44px); background: #090b12; }
+
+.ct-label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: #cbd5e1; }
+.ct-input {
+  width: 100%; padding: 13px 16px; border-radius: 12px; font-size: 15px; color: #f1f5f9;
+  background: rgba(255,255,255,0.025); border: 1px solid var(--ct-line-strong); outline: none;
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+textarea.ct-input { resize: vertical; min-height: 150px; line-height: 1.6; }
+.ct-input::placeholder { color: #475569; }
+.ct-input:hover { border-color: rgba(255,255,255,0.2); }
+.ct-input:focus { border-color: rgba(56,189,248,0.6); background: rgba(56,189,248,0.03); box-shadow: 0 0 0 4px rgba(56,189,248,0.12); }
+.ct-input.has-error { border-color: rgba(248,113,113,0.6); }
+.ct-error { margin-top: 8px; font-size: 13px; color: #fca5a5; }
+.ct-alert { padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(248,113,113,0.3); background: rgba(248,113,113,0.06); font-size: 14px; color: #fca5a5; }
+
+.ct-pill {
+  cursor: pointer; padding: 9px 14px; border-radius: 999px; font-size: 14px; color: #94a3b8;
+  border: 1px solid var(--ct-line-strong); background: rgba(255,255,255,0.02);
+  transition: border-color .2s ease, color .2s ease, background .2s ease;
+}
+.ct-pill:hover { color: #e2e8f0; border-color: rgba(255,255,255,0.22); }
+.ct-pill.is-active { color: #e0f2fe; border-color: rgba(56,189,248,0.55); background: rgba(56,189,248,0.1); }
+.ct-pill:focus-within { box-shadow: 0 0 0 3px rgba(56,189,248,0.25); }
+
+.ct-btn-primary {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 170px;
+  padding: 14px 24px; border-radius: 999px; font-weight: 600; font-size: 15px;
+  color: #04121c; background: linear-gradient(100deg, #7dd3fc, #6ee7b7);
+  box-shadow: 0 10px 40px -10px rgba(56,189,248,0.55), inset 0 1px 0 rgba(255,255,255,0.5);
+  transition: transform .2s ease, box-shadow .2s ease, opacity .2s ease;
+}
+.ct-btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 16px 50px -12px rgba(56,189,248,0.7), inset 0 1px 0 rgba(255,255,255,0.5); }
+.ct-btn-primary:disabled { opacity: 0.75; cursor: default; }
+.ct-link { font-weight: 500; color: #7dd3fc; }
+.ct-link:hover { color: #bae6fd; }
+
+.ct-success-icon { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 99px; color: #6ee7b7; background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.35); box-shadow: 0 0 40px -6px rgba(52,211,153,0.45); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-channel, .ct-channel-arrow, .ct-btn-primary, .ct-input, .ct-pill { transition: none; }
+}
+`;

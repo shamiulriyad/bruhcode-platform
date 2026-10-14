@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import confetti from 'canvas-confetti';
 import { roomAPI } from '../api';
 import useRoomStore from '../store/useRoomStore';
-import { startConnection } from '../utils/signalr';
+import { subscribeToRoom } from '../utils/signalr';
 import CountdownRing from '../components/rooms/CountdownRing';
 import WaitingIllustration from '../components/rooms/WaitingIllustration';
 
@@ -37,53 +37,24 @@ export default function RoomLobby() {
   }, [fetchRoom, resetRoom]);
 
   // SignalR connection
-  useEffect(() => {
-    let conn;
-    const setupSignalR = async () => {
-      try {
-        conn = await startConnection();
-        await conn.invoke('JoinRoom', parseInt(id));
-
-        conn.on('TimerSync', (data) => {
-          setTimer(data);
-        });
-
-        conn.on('RoomStatusChanged', (data) => {
-          if (data.status === 'Live') {
-            // "GO!" burst
-            setShowGo(true);
-            confetti({ particleCount: 100, spread: 70, origin: { y: 0.5 } });
-            setTimeout(() => {
-              navigate(`/rooms/${id}/live`);
-            }, 1500);
-          }
-        });
-
-        conn.on('MemberJoined', (data) => {
-          addMember(data);
-          toast.success(`${data.displayName} joined!`, { icon: '👋' });
-        });
-
-        conn.on('MemberLeft', (data) => {
-          removeMember(data.userId);
-        });
-      } catch (err) {
-        console.error('SignalR error:', err);
+  useEffect(() => subscribeToRoom(parseInt(id, 10), {
+    TimerSync: (data) => setTimer(data),
+    RoomStatusChanged: (data) => {
+      if (data.status === 'Live') {
+        // "GO!" burst
+        setShowGo(true);
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.5 } });
+        setTimeout(() => navigate(`/rooms/${id}/live`), 1500);
       }
-    };
-
-    setupSignalR();
-
-    return () => {
-      if (conn) {
-        conn.invoke('LeaveRoom', parseInt(id)).catch(() => {});
-        conn.off('TimerSync');
-        conn.off('RoomStatusChanged');
-        conn.off('MemberJoined');
-        conn.off('MemberLeft');
-      }
-    };
-  }, [id, setTimer, addMember, removeMember, navigate]);
+    },
+    MemberJoined: (data) => {
+      addMember(data);
+      toast.success(`${data.displayName} joined!`, { icon: '👋' });
+    },
+    MemberLeft: (data) => removeMember(data.userId),
+  }, {
+    onError: (err) => console.error('SignalR error:', err),
+  }), [id, setTimer, addMember, removeMember, navigate]);
 
   const copyInviteCode = () => {
     if (room?.inviteCode) {

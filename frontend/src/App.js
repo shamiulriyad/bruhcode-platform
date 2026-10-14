@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ScrollToTop from './components/ScrollToTop';
+import ReminderService from './components/ReminderService';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { roomAPI } from './api';
 
@@ -53,6 +54,7 @@ function App() {
       <AuthProvider>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <ScrollToTop />
+          <ReminderService />
           <div className="app-shell flex min-h-screen flex-col text-slate-100">
             <Navbar />
             <main className="app-main flex-1">
@@ -89,6 +91,7 @@ function App() {
                 <Route path="/games/complexity" element={<RequireAuth><ComplexityGame /></RequireAuth>} />
                 <Route path="/games/debug" element={<RequireAuth><DebugGame /></RequireAuth>} />
                 <Route path="/games/complexity/leaderboard" element={<RequireAuth><BrainGymLeaderboard /></RequireAuth>} />
+                <Route path="/games/debug/leaderboard" element={<RequireAuth><BrainGymLeaderboard gameKey="debug_the_code" /></RequireAuth>} />
                 <Route path="/profile/brain-gym" element={<RequireAuth><BrainGymProfilePage /></RequireAuth>} />
 
                 <Route path="*" element={<NotFound />} />

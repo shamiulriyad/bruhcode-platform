@@ -2,662 +2,543 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import ProfileSidebar from '../components/ProfileSidebar';
-import ContestCard from '../components/ContestCard';
 import { userAPI } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { addToCalendar } from '../utils/calendar';
 
-/* ─── Platform config (colors unchanged) ──────────────────────── */
-const PLATFORM_META = {
-  Codeforces:    { color: '#FF4D4D', abbr: 'CF'  },
-  LeetCode:      { color: '#FFA116', abbr: 'LC'  },
-  AtCoder:       { color: '#00C896', abbr: 'AC'  },
-  CodeChef:      { color: '#A0855B', abbr: 'CC'  },
-  GeeksforGeeks: { color: '#0F9D58', abbr: 'GFG' },
+const PLATFORMS = {
+  Codeforces: '#FF5A5F',
+  LeetCode: '#FFA116',
+  AtCoder: '#22D3A6',
+  CodeChef: '#C8A97E',
+  GeeksforGeeks: '#2FB574',
 };
-const DEFAULT_META = { color: '#818cf8', abbr: '??' };
+const colorOf = (platform) => PLATFORMS[platform] || '#818cf8';
 
-/* ─── easeOutCubic count-up hook ──────────────────────────────── */
-function useCountUp(target = 0, duration = 1100) {
-  const [val, setVal] = useState(0);
-  useEffect(() => {
-    let raf;
-    const start = performance.now();
-    const tick = (now) => {
-      const p = Math.min((now - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - p, 3);
-      setVal(Math.round(target * eased));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return val;
+const GAME_NAMES = {
+  complexity_guess: { name: 'Complexity Quiz', to: '/games/complexity' },
+  debug_the_code: { name: 'Debug the Code', to: '/games/debug' },
+};
+
+const ICONS = {
+  bookmark: 'M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1Z',
+  clock: 'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
+  live: 'M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM8.5 15.5a5 5 0 0 1 0-7M15.5 8.5a5 5 0 0 1 0 7M5.6 18.4a9 9 0 0 1 0-12.8M18.4 5.6a9 9 0 0 1 0 12.8',
+  layers: 'M12 3 3 8l9 5 9-5-9-5ZM3 13l9 5 9-5',
+  arrow: 'M5 12h14M13 6l6 6-6 6',
+  external: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
+  calendarPlus: 'M7 3v3M17 3v3M4 9h16M12 12v6M9 15h6M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z',
+  trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3',
+  edit: 'M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4',
+};
+
+function Glyph({ name, className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d={ICONS[name]} />
+    </svg>
+  );
 }
 
-/* ─── Telemetry stat readout ──────────────────────────────────── */
-function StatReadout({ label, value, accent, glyph, delay = 0 }) {
-  const count = useCountUp(value);
+/* ─── Helpers ─────────────────────────────────────────────────── */
+
+function timing(contest, now) {
+  const start = new Date(contest.startTime).getTime();
+  const end = start + (contest.duration || 0) * 60_000;
+  if (now >= end) return { state: 'ended', label: 'Ended' };
+  if (now >= start) return { state: 'live', label: 'Live now' };
+  const mins = Math.round((start - now) / 60_000);
+  const d = Math.floor(mins / 1440);
+  const h = Math.floor((mins % 1440) / 60);
+  const m = mins % 60;
+  return { state: 'upcoming', label: d > 0 ? `in ${d}d ${h}h` : h > 0 ? `in ${h}h ${m}m` : `in ${m}m` };
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 5) return 'Up late';
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+const formatDate = (iso) =>
+  new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+/* ─── Small pieces ────────────────────────────────────────────── */
+
+function Stat({ icon, label, value, tone }) {
   return (
-    <div
-      className="pf-stat"
-      style={{ '--accent': accent, animationDelay: `${delay}s` }}
-    >
-      <div className="pf-stat__edge" />
-      <div className="pf-stat__head">
-        <span className="pf-stat__label">{label}</span>
-        <span className="pf-stat__glyph" aria-hidden>{glyph}</span>
+    <div className="pf-stat" style={{ '--tone': tone }}>
+      <span className="pf-stat-icon"><Glyph name={icon} /></span>
+      <div className="pf-stat-value">{value}</div>
+      <div className="pf-stat-label">{label}</div>
+    </div>
+  );
+}
+
+function SectionHead({ eyebrow, title, action }) {
+  return (
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <p className="pf-eyebrow">{eyebrow}</p>
+        <h2 className="pf-h2 mt-2">{title}</h2>
       </div>
-      <div className="pf-stat__value">{count}</div>
-      <div className="pf-stat__track"><span className="pf-stat__pip" /></div>
+      {action}
     </div>
   );
 }
 
-/* ─── Animated platform bar ───────────────────────────────────── */
-function PlatformBar({ platform, count, total, mounted, delay }) {
-  const meta = PLATFORM_META[platform] || DEFAULT_META;
-  const pct = total ? Math.round((count / total) * 100) : 0;
+function AccuracyRing({ value }) {
+  const r = 30;
+  const c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(100, value));
   return (
-    <div className="pf-bar" style={{ animationDelay: `${delay}s` }}>
-      <div className="pf-bar__top">
-        <div className="pf-bar__id">
-          <span className="pf-bar__chip" style={{ color: meta.color, borderColor: `${meta.color}40`, background: `${meta.color}14` }}>
-            {meta.abbr}
-          </span>
-          <span className="pf-bar__name">{platform}</span>
-        </div>
-        <span className="pf-bar__num" style={{ color: meta.color }}>
-          {count}<span className="pf-bar__pct"> · {pct}%</span>
-        </span>
-      </div>
-      <div className="pf-bar__track">
-        <div
-          className="pf-bar__fill"
-          style={{
-            width: mounted ? `${pct}%` : '0%',
-            background: `linear-gradient(90deg, ${meta.color}66, ${meta.color})`,
-            boxShadow: `0 0 12px ${meta.color}55`,
-          }}
-        />
-      </div>
+    <div className="pf-ring">
+      <svg viewBox="0 0 72 72" aria-hidden="true">
+        <circle cx="36" cy="36" r={r} className="pf-ring-track" />
+        <circle cx="36" cy="36" r={r} className="pf-ring-fill" strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} />
+      </svg>
+      <span>{Math.round(pct)}%</span>
     </div>
   );
 }
 
-/* ─── Identity row ────────────────────────────────────────────── */
-function IdentityRow({ label, value, accent }) {
-  return (
-    <div className="pf-row" style={{ '--accent': accent }}>
-      <span className="pf-row__tick" />
-      <span className="pf-row__key">{label}</span>
-      <span className="pf-row__val" style={{ color: value ? accent : '#475569' }}>
-        {value || '— not set'}
-      </span>
-    </div>
-  );
-}
+/* ─── Page ────────────────────────────────────────────────────── */
 
-/* ─── Quick tip chip ──────────────────────────────────────────── */
-function TipChip({ icon, text, accent, delay }) {
-  return (
-    <div className="pf-tip" style={{ '--accent': accent, animationDelay: `${delay}s` }}>
-      <span className="pf-tip__icon">{icon}</span>
-      <span className="pf-tip__text">{text}</span>
-    </div>
-  );
-}
-
-/* ─── Main Profile Component ───────────────────────────────────── */
 export default function Profile() {
-  const { user } = useAuth();
+  const { user: authUser } = useAuth();
   const location = useLocation();
-  const [savedContests, setSavedContests] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const [saved, setSaved] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
-  const [brainGymStats, setBrainGymStats] = useState([]);
+  const [now, setNow] = useState(Date.now());
 
+  const user = profile || authUser;
+
+  // Scroll to a section when arriving from another profile page's sidebar
   useEffect(() => {
-    if (location.state?.scrollTo) {
-      const targetId = location.state.scrollTo;
-      window.history.replaceState({}, document.title);
-      const timer = setTimeout(() => {
-        const target = document.getElementById(targetId);
-        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 200);
-      return () => clearTimeout(timer);
-    }
+    const target = location.state?.scrollTo;
+    if (!target) return undefined;
+    window.history.replaceState({}, document.title);
+    const t = setTimeout(() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
+    return () => clearTimeout(t);
   }, [location]);
 
-  const loadSavedContests = async () => {
+  const loadSaved = async () => {
     try {
-      setLoading(true);
-      const response = await userAPI.getSavedContests();
-      const contests = response.data
-        .map((item) => ({ ...(item.contest || {}), savedContestId: item.id, status: item.status }))
-        .filter((c) => c.id);
-      setSavedContests(contests);
+      const { data } = await userAPI.getSavedContests();
+      setSaved(
+        data
+          .map((item) => ({ ...(item.contest || {}), savedContestId: item.id, status: item.status }))
+          .filter((c) => c.id),
+      );
     } catch (err) {
-      toast.error(err?.response?.data || 'Failed to load profile data');
+      toast.error('Could not load your saved contests');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadBrainGymStats = async () => {
+  useEffect(() => {
+    loadSaved();
+    userAPI.getProfile().then(({ data }) => setProfile(data)).catch(() => {});
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const removeContest = async (contest) => {
     try {
-      const { data } = await userAPI.getProfile();
-      setBrainGymStats(data.brainGymStats || []);
-    } catch (err) {
-      // Non-critical — silently fail
-      console.warn('Could not load brain gym stats', err);
+      await userAPI.removeContest(contest.id);
+      setSaved((list) => list.filter((c) => c.id !== contest.id));
+      toast.success('Removed from your list');
+    } catch {
+      toast.error('Could not remove this contest');
     }
   };
 
-  useEffect(() => { loadSavedContests(); loadBrainGymStats(); }, []);
-  useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 150);
-    return () => clearTimeout(t);
-  }, [savedContests]);
+  const sorted = useMemo(
+    () => [...saved].sort((a, b) => new Date(a.startTime) - new Date(b.startTime)),
+    [saved],
+  );
+  const withTiming = sorted.map((c) => ({ ...c, timing: timing(c, now) }));
+  const active = withTiming.filter((c) => c.timing.state !== 'ended');
+  const ended = withTiming.filter((c) => c.timing.state === 'ended');
+  const stats = {
+    saved: saved.length,
+    upcoming: withTiming.filter((c) => c.timing.state === 'upcoming').length,
+    live: withTiming.filter((c) => c.timing.state === 'live').length,
+    platforms: new Set(saved.map((c) => c.platform)).size,
+  };
 
-  const stats = useMemo(() => {
-    const now = Date.now();
-    return {
-      saved: savedContests.length,
-      live: savedContests.filter((c) => {
-        const s = new Date(c.startTime).getTime();
-        return s <= now && s + c.duration * 60000 > now;
-      }).length,
-      upcoming: savedContests.filter((c) => new Date(c.startTime).getTime() > now).length,
-      platforms: new Set(savedContests.map((c) => c.platform)).size,
-    };
-  }, [savedContests]);
+  const platformSplit = Object.entries(
+    saved.reduce((acc, c) => ({ ...acc, [c.platform]: (acc[c.platform] || 0) + 1 }), {}),
+  ).sort((a, b) => b[1] - a[1]);
 
-  const platformCounts = useMemo(() =>
-    savedContests.reduce((acc, c) => {
-      acc[c.platform] = (acc[c.platform] || 0) + 1;
-      return acc;
-    }, {}),
-    [savedContests]
+  const details = [
+    { label: 'University', value: user?.university },
+    { label: 'Department', value: user?.department },
+    { label: 'Codeforces', value: user?.codeforceHandle, href: user?.codeforceHandle && `https://codeforces.com/profile/${user.codeforceHandle}` },
+    { label: 'LeetCode', value: user?.leetcodeUsername, href: user?.leetcodeUsername && `https://leetcode.com/u/${user.leetcodeUsername}` },
+    { label: 'AtCoder', value: user?.atCoderHandle, href: user?.atCoderHandle && `https://atcoder.jp/users/${user.atCoderHandle}` },
+    { label: 'CodeChef', value: user?.codeChefHandle, href: user?.codeChefHandle && `https://www.codechef.com/users/${user.codeChefHandle}` },
+  ];
+  const completion = Math.round(
+    (([user?.bio, user?.profilePictureUrl].filter(Boolean).length + details.filter((d) => d.value).length) / (details.length + 2)) * 100,
   );
 
-  /* grouped identity fields — same data, new structure */
-  const identityGroups = [
-    {
-      title: 'Identity',
-      fields: [
-        { label: 'Display Name', value: user?.displayName, accent: '#f1f5f9' },
-        { label: 'Username',     value: user?.username,    accent: '#38bdf8' },
-        { label: 'Email',        value: user?.email,       accent: '#7dd3fc' },
-        { label: 'Joined',       value: user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : null, accent: '#a78bfa' },
-      ],
-    },
-    {
-      title: 'Academic',
-      fields: [
-        { label: 'University', value: user?.university, accent: '#34d399' },
-        { label: 'Department', value: user?.department, accent: '#fbbf24' },
-      ],
-    },
-    {
-      title: 'Handles',
-      fields: [
-        { label: 'Codeforces', value: user?.codeforceHandle,   accent: '#f87171' },
-        { label: 'LeetCode',   value: user?.leetcodeUsername, accent: '#f59e0b' },
-      ],
-    },
-  ];
-
-  const removeContest = async (contestId) => {
-    try {
-      await userAPI.removeContest(contestId);
-      toast.success('Removed from profile');
-      await loadSavedContests();
-    } catch (err) {
-      toast.error(err?.response?.data || 'Could not remove contest');
-    }
-  };
-
-  const displayName = user?.displayName || user?.email?.split('@')[0] || 'coder';
-  const initials = displayName
-    .split(/[\s._-]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase())
-    .join('') || 'C';
-
-  const today = new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const games = profile?.brainGymStats || [];
+  const firstName = (user?.displayName || '').split(' ')[0] || 'coder';
 
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&display=swap');
+    <div className="pf-root">
+      <style>{STYLES}</style>
+      <div className="pf-glow" aria-hidden="true" />
 
-        .pf-root, .pf-root * { box-sizing: border-box; }
-        .pf-root { font-family: 'DM Sans', sans-serif; position: relative; }
-
-        /* ── ambient animated backdrop ── */
-        .pf-bg { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
-        .pf-bg__grid {
-          position: absolute; inset: -2px;
-          background-image:
-            linear-gradient(rgba(56,189,248,0.04) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(56,189,248,0.04) 1px, transparent 1px);
-          background-size: 46px 46px;
-          mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 0%, transparent 80%);
-          animation: gridDrift 22s linear infinite;
-        }
-        .pf-bg__glow-a, .pf-bg__glow-b { position: absolute; border-radius: 50%; filter: blur(80px); }
-        .pf-bg__glow-a { top: -120px; right: 8%; width: 360px; height: 360px; background: rgba(14,165,233,0.14); animation: float 14s ease-in-out infinite; }
-        .pf-bg__glow-b { bottom: -160px; left: -60px; width: 420px; height: 420px; background: rgba(16,185,129,0.10); animation: float 18s ease-in-out infinite reverse; }
-
-        @keyframes gridDrift { to { background-position: 46px 46px; } }
-        @keyframes float { 0%,100% { transform: translateY(0) translateX(0); } 50% { transform: translateY(28px) translateX(-18px); } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes ring { 0% { transform: scale(.85); opacity: .55; } 70% { transform: scale(1.6); opacity: 0; } 100% { opacity: 0; } }
-        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
-        @keyframes shimmer { 100% { transform: translateX(100%); } }
-        @keyframes scan { 0% { transform: translateY(-100%); } 100% { transform: translateY(900%); } }
-
-        /* ── shared panel ── */
-        .pf-panel {
-          position: relative; z-index: 1; overflow: hidden;
-          background: rgba(10,10,25,0.7);
-          border: 1px solid rgba(255,255,255,0.06);
-          border-radius: 20px;
-          backdrop-filter: blur(16px);
-          animation: fadeUp .55s ease both;
-        }
-        .pf-panel__edge {
-          position: absolute; top: 0; left: 0; right: 0; height: 2px;
-          background: linear-gradient(90deg, transparent, var(--accent, #38bdf8), transparent);
-          opacity: .75;
-        }
-        .pf-eyebrow {
-          font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
-          letter-spacing: .18em; text-transform: uppercase; color: #475569;
-          display: flex; align-items: center; gap: 8px;
-        }
-        .pf-eyebrow::before { content: ''; width: 14px; height: 1px; background: var(--accent, #38bdf8); opacity: .6; }
-
-        /* ── HERO ── */
-        .pf-hero {
-          position: relative; z-index: 1; overflow: hidden;
-          display: flex; align-items: center; gap: 26px; flex-wrap: wrap;
-          padding: 34px;
-          border-radius: 24px;
-          border: 1px solid rgba(255,255,255,0.07);
-          background: linear-gradient(135deg, #07071a 0%, #0c0c22 60%, #07071a 100%);
-          animation: fadeUp .55s ease .05s both;
-        }
-        .pf-hero::before {
-          content: ''; position: absolute; inset: 0; pointer-events: none;
-          background:
-            radial-gradient(ellipse at 75% 0%, rgba(99,102,241,0.14) 0%, transparent 60%),
-            radial-gradient(ellipse at 5% 120%, rgba(20,184,166,0.09) 0%, transparent 55%);
-        }
-        .pf-hero::after {
-          content: ''; position: absolute; left: 0; right: 0; top: 0; height: 36px;
-          background: linear-gradient(rgba(56,189,248,0.18), transparent);
-          animation: scan 6.5s linear infinite; opacity: .4;
-        }
-        .pf-avatar-wrap { position: relative; flex-shrink: 0; }
-        .pf-avatar {
-          position: relative; z-index: 2;
-          width: 84px; height: 84px; border-radius: 22px;
-          display: grid; place-items: center;
-          font-family: 'Syne', sans-serif; font-weight: 800; font-size: 30px; color: #f1f5f9;
-          background: linear-gradient(140deg, rgba(14,165,233,0.9), rgba(16,185,129,0.75));
-          box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 18px 40px -12px rgba(14,165,233,0.6);
-          letter-spacing: -.02em;
-        }
-        .pf-avatar-ring {
-          position: absolute; inset: 0; border-radius: 22px;
-          border: 1px solid rgba(14,165,233,0.6);
-          animation: ring 2.6s ease-out infinite;
-        }
-        .pf-hero__body { position: relative; z-index: 1; flex: 1; min-width: 240px; }
-        .pf-hero__title {
-          font-family: 'Syne', sans-serif; font-weight: 700; font-size: 40px;
-          color: #f1f5f9; letter-spacing: -.03em; line-height: 1.05; margin: 8px 0 12px;
-        }
-        .pf-hero__title b { color: #38bdf8; font-weight: 700; }
-        .pf-hero__sub { font-size: 15px; color: #94a3b8; line-height: 1.6; max-width: 540px; }
-        .pf-pills { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
-        .pf-pill {
-          display: inline-flex; align-items: center; gap: 8px;
-          font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600;
-          padding: 7px 13px; border-radius: 999px;
-          background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); color: #94a3b8;
-        }
-        .pf-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981; animation: blink 1.6s ease infinite; }
-
-        /* ── STAT STRIP ── */
-        .pf-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-        .pf-stat {
-          position: relative; z-index: 1; overflow: hidden;
-          background: rgba(10,10,25,0.7);
-          border: 1px solid rgba(255,255,255,0.06);
-          border-radius: 20px; padding: 20px 22px;
-          backdrop-filter: blur(16px);
-          animation: fadeUp .55s ease both;
-          transition: transform .35s cubic-bezier(.22,1,.36,1), border-color .35s, box-shadow .35s;
-        }
-        .pf-stat:hover {
-          transform: translateY(-5px);
-          border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-          box-shadow: 0 22px 44px -22px var(--accent);
-        }
-        .pf-stat__edge { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: .7; }
-        .pf-stat__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-        .pf-stat__label { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: .15em; text-transform: uppercase; color: #475569; }
-        .pf-stat__glyph { font-size: 14px; opacity: .85; }
-        .pf-stat__value { font-family: 'Syne', sans-serif; font-size: 38px; font-weight: 700; color: #f1f5f9; letter-spacing: -.04em; line-height: 1; }
-        .pf-stat__track { margin-top: 14px; height: 3px; border-radius: 10px; background: rgba(255,255,255,0.05); overflow: hidden; }
-        .pf-stat__pip { display: block; height: 100%; width: 38%; border-radius: 10px; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-
-        /* ── DASHBOARD ROW (identity + platforms) ── */
-        .pf-deck { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 16px; }
-        .pf-panel__pad { padding: 24px; }
-        .pf-panel__title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; color: #f8fafc; letter-spacing: -.02em; margin: 8px 0 0; }
-
-        .pf-group + .pf-group { margin-top: 18px; padding-top: 16px; border-top: 1px dashed rgba(255,255,255,0.07); }
-        .pf-group__label { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #334155; margin-bottom: 8px; }
-        .pf-row {
-          display: grid; grid-template-columns: 4px 130px 1fr; align-items: center; gap: 12px;
-          padding: 10px 12px; border-radius: 12px;
-          transition: background .25s;
-        }
-        .pf-row:hover { background: rgba(255,255,255,0.03); }
-        .pf-row__tick { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-        .pf-row__key { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #64748b; letter-spacing: .02em; }
-        .pf-row__val { font-size: 14px; font-weight: 600; word-break: break-word; }
-
-        .pf-bar { padding: 11px 0; animation: fadeUp .45s ease both; }
-        .pf-bar__top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .pf-bar__id { display: flex; align-items: center; gap: 10px; }
-        .pf-bar__chip { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 7px; border: 1px solid; letter-spacing: .04em; }
-        .pf-bar__name { font-size: 13px; font-weight: 600; color: #94a3b8; }
-        .pf-bar__num { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; }
-        .pf-bar__pct { color: #334155; font-weight: 400; }
-        .pf-bar__track { height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; }
-        .pf-bar__fill { height: 100%; border-radius: 10px; transition: width 1s cubic-bezier(.22,1,.36,1); }
-
-        /* ── TIPS ── */
-        .pf-tips { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
-        .pf-tip {
-          display: flex; align-items: center; gap: 12px;
-          padding: 14px 16px; border-radius: 16px;
-          background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
-          animation: fadeUp .5s ease both;
-          transition: transform .3s, border-color .3s, background .3s;
-        }
-        .pf-tip:hover { transform: translateX(4px); border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: rgba(255,255,255,0.04); }
-        .pf-tip__icon { font-size: 17px; flex-shrink: 0; }
-        .pf-tip__text { font-size: 13px; color: #64748b; line-height: 1.55; }
-
-        /* ── SAVED ── */
-        .pf-saved-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-        .pf-badge { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: #0ea5e9; background: rgba(14,165,233,0.12); border: 1px solid rgba(14,165,233,0.25); padding: 3px 9px; border-radius: 999px; }
-        .pf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
-        .pf-skel { position: relative; overflow: hidden; height: 280px; border-radius: 16px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); }
-        .pf-skel::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent); animation: shimmer 1.5s infinite; }
-        .pf-empty { text-align: center; padding: 56px 24px; border: 1px dashed rgba(255,255,255,0.1); border-radius: 16px; color: #64748b; background: rgba(255,255,255,0.02); animation: fadeUp .5s ease both; }
-        .pf-empty__icon { font-size: 42px; margin-bottom: 12px; }
-        .pf-empty__t { font-size: 16px; font-weight: 600; color: #94a3b8; margin-bottom: 4px; }
-
-        /* ── BRAIN GYM STATS ── */
-        .pf-gym { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
-        .pf-gym-card {
-          position: relative; overflow: hidden;
-          background: rgba(10,10,25,0.7);
-          border: 1px solid rgba(255,255,255,0.06);
-          border-radius: 20px; padding: 22px 24px;
-          backdrop-filter: blur(16px);
-          animation: fadeUp .55s ease both;
-          transition: transform .35s cubic-bezier(.22,1,.36,1), border-color .35s, box-shadow .35s;
-        }
-        .pf-gym-card:hover {
-          transform: translateY(-5px);
-          border-color: rgba(14,165,233,0.35);
-          box-shadow: 0 22px 44px -22px rgba(14,165,233,0.25);
-        }
-        .pf-gym-card__edge { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, #0ea5e9, transparent); opacity: .7; }
-        .pf-gym-card__title { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; color: #f1f5f9; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-        .pf-gym-card__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .pf-gym-metric { text-align: center; padding: 10px 8px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.04); }
-        .pf-gym-metric__val { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 700; line-height: 1; }
-        .pf-gym-metric__label { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: .15em; text-transform: uppercase; color: #475569; margin-top: 4px; }
-        .pf-gym-empty {
-          text-align: center; padding: 40px 24px; border: 1px dashed rgba(255,255,255,0.1);
-          border-radius: 16px; color: #64748b; background: rgba(255,255,255,0.02);
-          animation: fadeUp .5s ease both;
-        }
-        .pf-gym-empty__icon { font-size: 38px; margin-bottom: 10px; }
-        .pf-gym-empty__t { font-size: 15px; font-weight: 600; color: #94a3b8; margin-bottom: 6px; }
-        .pf-gym-cta {
-          display: inline-flex; align-items: center; gap: 6px;
-          margin-top: 14px; padding: 10px 22px; border-radius: 999px;
-          font-size: 13px; font-weight: 700;
-          background: linear-gradient(135deg, rgba(14,165,233,0.15), rgba(16,185,129,0.15));
-          border: 1px solid rgba(14,165,233,0.3);
-          color: #38bdf8; text-decoration: none;
-          transition: all .3s;
-        }
-        .pf-gym-cta:hover { background: linear-gradient(135deg, rgba(14,165,233,0.25), rgba(16,185,129,0.25)); transform: translateY(-2px); box-shadow: 0 8px 20px rgba(14,165,233,0.2); }
-
-        /* ── responsive ── */
-        @media (max-width: 1280px) {
-          .pf-deck { grid-template-columns: 1fr; }
-          .pf-stats { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (max-width: 768px) {
-          .pf-hero__title { font-size: 32px; }
-          .pf-hero { padding: 26px; }
-        }
-        @media (max-width: 640px) {
-          .pf-stats { grid-template-columns: 1fr; }
-        }
-      `}</style>
-
-      <div className="pf-root min-h-screen bg-slate-950">
-        {/* ambient backdrop */}
-        <div className="pf-bg" aria-hidden>
-          <div className="pf-bg__grid" />
-          <div className="pf-bg__glow-a" />
-          <div className="pf-bg__glow-b" />
+      <div className="pf-wrap relative grid grid-cols-1 gap-8 py-10 lg:grid-cols-[280px_minmax(0,1fr)] lg:py-14">
+        <div>
+          <ProfileSidebar />
         </div>
 
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8" style={{ position: 'relative', zIndex: 1 }}>
-          <div className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
-            {/* Sidebar */}
-            <div>
-              <ProfileSidebar />
+        <div className="min-w-0 space-y-14">
+          {/* ── Header ─────────────────────────────── */}
+          <section id="overview" className="scroll-mt-28">
+            <p className="pf-eyebrow">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+            <div className="mt-3 flex flex-wrap items-end justify-between gap-5">
+              <div className="min-w-0">
+                <h1 className="pf-h1">{greeting()}, {firstName}.</h1>
+                <p className="pf-lead mt-3 max-w-xl">
+                  {stats.upcoming > 0
+                    ? `You have ${stats.upcoming} upcoming contest${stats.upcoming === 1 ? '' : 's'} on your list.`
+                    : 'Your list is clear. Find your next contest to get started.'}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link to="/profile/settings" className="pf-btn-ghost"><Glyph name="edit" /> Edit profile</Link>
+                <Link to="/" className="pf-btn-primary">Find contests <Glyph name="arrow" /></Link>
+              </div>
             </div>
 
-            {/* Main */}
-            <div className="space-y-6">
-              {/* HERO */}
-              <div className="pf-hero">
-                <div className="pf-avatar-wrap">
-                  <div className="pf-avatar-ring" />
-                  <div className="pf-avatar">{initials}</div>
+            <div className="mt-8 grid grid-cols-2 gap-3 xl:grid-cols-4">
+              <Stat icon="bookmark" label="Saved contests" value={stats.saved} tone="#7dd3fc" />
+              <Stat icon="clock" label="Upcoming" value={stats.upcoming} tone="#6ee7b7" />
+              <Stat icon="live" label="Live now" value={stats.live} tone="#fca5a5" />
+              <Stat icon="layers" label="Platforms" value={stats.platforms} tone="#fcd34d" />
+            </div>
+          </section>
+
+          {/* ── Next up + profile card ─────────────── */}
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.35fr_1fr]">
+            <section className="pf-panel">
+              <SectionHead eyebrow="Your schedule" title="Next up" />
+              {loading ? (
+                <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="pf-skeleton h-[68px]" />)}</div>
+              ) : active.length === 0 ? (
+                <div className="pf-empty">
+                  <p>Nothing scheduled yet.</p>
+                  <Link to="/" className="pf-link">Browse upcoming contests <Glyph name="arrow" /></Link>
                 </div>
-                <div className="pf-hero__body">
-                  <div className="pf-eyebrow" style={{ '--accent': '#0ea5e9', color: '#0ea5e9' }}>
-                    Welcome back, {displayName}
-                  </div>
-                  <h1 className="pf-hero__title">Command <b>Deck</b></h1>
-                  <p className="pf-hero__sub">
-                    Track your competitive-programming journey, schedule practice rooms, and stay ahead of every upcoming contest.
-                  </p>
-                  <div className="pf-pills">
-                    <span className="pf-pill"><span className="pf-dot" /> System online</span>
-                    <span className="pf-pill">📅 {today}</span>
-                    <span className="pf-pill" style={{ color: '#10b981' }}>{stats.live} live now</span>
-                  </div>
+              ) : (
+                <ol className="pf-timeline">
+                  {active.slice(0, 4).map((c) => (
+                    <li key={c.id}>
+                      <span className="pf-timeline-dot" style={{ background: colorOf(c.platform), boxShadow: `0 0 12px ${colorOf(c.platform)}` }} />
+                      <Link to={`/contest/${c.id}`} className="pf-timeline-row">
+                        <span className="min-w-0 flex-1">
+                          <span className="pf-platform" style={{ color: colorOf(c.platform) }}>{c.platform}</span>
+                          <span className="pf-contest-name">{c.name}</span>
+                          <span className="pf-muted">{formatDate(c.startTime)}</span>
+                        </span>
+                        <span className={c.timing.state === 'live' ? 'pf-when is-live' : 'pf-when'}>{c.timing.label}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+
+            <section className="pf-panel">
+              <SectionHead
+                eyebrow="Profile"
+                title="Your details"
+                action={<Link to="/profile/settings" className="pf-link">Edit <Glyph name="arrow" /></Link>}
+              />
+              <div className="pf-complete">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Profile complete</span>
+                  <span className="pf-mono text-slate-200">{completion}%</span>
                 </div>
+                <div className="pf-meter"><span style={{ width: `${completion}%` }} /></div>
               </div>
-
-              {/* STAT STRIP */}
-              <div id="stats" className="pf-stats">
-                <StatReadout label="Total Saved" value={stats.saved}     accent="#0ea5e9" glyph="📌" delay={0.10} />
-                <StatReadout label="Live Now"    value={stats.live}      accent="#06b6d4" glyph="🔴" delay={0.16} />
-                <StatReadout label="Upcoming"    value={stats.upcoming}  accent="#10b981" glyph="↗" delay={0.22} />
-                <StatReadout label="Platforms"   value={stats.platforms} accent="#f59e0b" glyph="◆"  delay={0.28} />
-              </div>
-
-              {/* DASHBOARD ROW: identity + platform breakdown side-by-side */}
-              <div className="pf-deck">
-                {/* Identity */}
-                <section id="overview" className="pf-panel" style={{ '--accent': '#38bdf8', animationDelay: '.12s' }}>
-                  <div className="pf-panel__edge" />
-                  <div className="pf-panel__pad">
-                    <div className="pf-eyebrow" style={{ '--accent': '#38bdf8' }}>Overview</div>
-                    <h2 className="pf-panel__title">Account &amp; coding handles</h2>
-                    <div style={{ marginTop: 18 }}>
-                      {identityGroups.map((group) => (
-                        <div className="pf-group" key={group.title}>
-                          <div className="pf-group__label">{group.title}</div>
-                          {group.fields.map((f) => (
-                            <IdentityRow key={f.label} label={f.label} value={f.value} accent={f.accent} />
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </section>
-
-                {/* Platform breakdown */}
-                <section className="pf-panel" style={{ '--accent': '#10b981', animationDelay: '.18s' }}>
-                  <div className="pf-panel__edge" />
-                  <div className="pf-panel__pad">
-                    <div className="pf-eyebrow" style={{ '--accent': '#10b981' }}>Platform Breakdown</div>
-                    <h2 className="pf-panel__title">Where you compete</h2>
-                    <div style={{ marginTop: 14 }}>
-                      {Object.keys(platformCounts).length > 0 ? (
-                        Object.entries(platformCounts).map(([platform, count], i) => (
-                          <PlatformBar
-                            key={platform}
-                            platform={platform}
-                            count={count}
-                            total={stats.saved}
-                            mounted={mounted}
-                            delay={0.2 + i * 0.07}
-                          />
-                        ))
+              {user?.bio && <p className="pf-bio">{user.bio}</p>}
+              <dl className="pf-details">
+                {details.map((d) => (
+                  <div key={d.label}>
+                    <dt>{d.label}</dt>
+                    <dd>
+                      {d.value ? (
+                        d.href ? (
+                          <a href={d.href} target="_blank" rel="noopener noreferrer" className="pf-handle">
+                            {d.value} <Glyph name="external" className="h-3.5 w-3.5" />
+                          </a>
+                        ) : d.value
                       ) : (
-                        <div style={{ padding: '28px 4px', color: '#475569', fontSize: 14 }}>
-                          Save contests to see your platform distribution here.
-                        </div>
+                        <Link to="/profile/settings" className="pf-add">Add</Link>
                       )}
-                    </div>
+                    </dd>
                   </div>
-                </section>
-              </div>
-
-              {/* BRAIN GYM STATS */}
-              <section className="pf-panel" style={{ '--accent': '#0ea5e9', animationDelay: '.24s' }}>
-                <div className="pf-panel__edge" />
-                <div className="pf-panel__pad">
-                  <div className="pf-eyebrow" style={{ '--accent': '#0ea5e9' }}>Brain Gym</div>
-                  <h2 className="pf-panel__title">Game Performance</h2>
-                  <div style={{ marginTop: 18 }}>
-                    {brainGymStats.length > 0 ? (
-                      <div className="pf-gym">
-                        {brainGymStats.map((stat) => {
-                          const gameLabel = stat.gameType === 'complexity_guess'
-                            ? '⏱ Complexity Quiz'
-                            : stat.gameType;
-                          return (
-                            <div className="pf-gym-card" key={stat.gameType}>
-                              <div className="pf-gym-card__edge" />
-                              <div className="pf-gym-card__title">
-                                {gameLabel}
-                              </div>
-                              <div className="pf-gym-card__grid">
-                                <div className="pf-gym-metric">
-                                  <div className="pf-gym-metric__val" style={{ color: '#10b981' }}>
-                                    {stat.accuracy}%
-                                  </div>
-                                  <div className="pf-gym-metric__label">Accuracy</div>
-                                </div>
-                                <div className="pf-gym-metric">
-                                  <div className="pf-gym-metric__val" style={{ color: '#f59e0b' }}>
-                                    {stat.bestStreak}
-                                  </div>
-                                  <div className="pf-gym-metric__label">Best Streak</div>
-                                </div>
-                                <div className="pf-gym-metric">
-                                  <div className="pf-gym-metric__val" style={{ color: '#38bdf8' }}>
-                                    {stat.totalCorrect}/{stat.totalAttempted}
-                                  </div>
-                                  <div className="pf-gym-metric__label">Correct</div>
-                                </div>
-                                <div className="pf-gym-metric">
-                                  <div className="pf-gym-metric__val" style={{ color: '#a78bfa' }}>
-                                    {Math.ceil(stat.totalAttempted / 10)}
-                                  </div>
-                                  <div className="pf-gym-metric__label">Games</div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="pf-gym-empty">
-                        <div className="pf-gym-empty__icon">🏋️‍♂️</div>
-                        <div className="pf-gym-empty__t">No Brain Gym stats yet</div>
-                        <div style={{ fontSize: 13 }}>Play games to sharpen your skills and track your progress here</div>
-                        <Link to="/games/complexity" className="pf-gym-cta">
-                          Try Brain Gym →
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              {/* TIPS */}
-              <div className="pf-tips" style={{ animation: 'fadeUp .5s ease .35s both' }}>
-                <TipChip icon="🔔" accent="#0ea5e9" text="Enable notifications for upcoming-contest alerts" delay={0.38} />
-                <TipChip icon="💾" accent="#10b981" text="Bookmark contests to pin them to your profile" delay={0.43} />
-                <TipChip icon="📅" accent="#f59e0b" text="Use the calendar view to plan your schedule" delay={0.48} />
-              </div>
-
-              {/* SAVED */}
-              <div id="saved">
-                <div className="pf-saved-head">
-                  <div className="pf-eyebrow" style={{ '--accent': '#0ea5e9' }}>Your Saved Contests</div>
-                  <span className="pf-badge">{stats.saved}</span>
-                </div>
-
-                {loading ? (
-                  <div className="pf-grid">
-                    {[1, 2, 3, 4, 5, 6].map((i) => <div key={i} className="pf-skel" />)}
-                  </div>
-                ) : savedContests.length > 0 ? (
-                  <div className="pf-grid">
-                    {savedContests.map((contest) => (
-                      <ContestCard
-                        key={contest.id}
-                        contest={contest}
-                        onRemove={() => removeContest(contest.savedContestId)}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="pf-empty">
-                    <div className="pf-empty__icon">🎯</div>
-                    <div className="pf-empty__t">No saved contests yet</div>
-                    <div style={{ fontSize: 14 }}>Browse contests and bookmark your favorites to see them here</div>
-                  </div>
-                )}
-              </div>
-            </div>
+                ))}
+              </dl>
+            </section>
           </div>
+
+          {/* ── Platform split ─────────────────────── */}
+          {platformSplit.length > 0 && (
+            <section className="pf-panel">
+              <SectionHead eyebrow="Breakdown" title="Where you compete" />
+              <div className="pf-split" role="img" aria-label={platformSplit.map(([p, n]) => `${p}: ${n}`).join(', ')}>
+                {platformSplit.map(([p, n]) => (
+                  <span key={p} style={{ flexGrow: n, background: colorOf(p) }} />
+                ))}
+              </div>
+              <ul className="mt-5 flex flex-wrap gap-x-8 gap-y-3">
+                {platformSplit.map(([p, n]) => (
+                  <li key={p} className="flex items-center gap-2.5 text-sm">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: colorOf(p) }} />
+                    <span className="text-slate-300">{p}</span>
+                    <span className="pf-mono text-slate-500">{n} · {Math.round((n / stats.saved) * 100)}%</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* ── Brain Gym ──────────────────────────── */}
+          <section>
+            <SectionHead
+              eyebrow="Brain Gym"
+              title="Game performance"
+              action={<Link to="/profile/brain-gym" className="pf-link">Full stats <Glyph name="arrow" /></Link>}
+            />
+            {games.length === 0 ? (
+              <div className="pf-panel pf-empty">
+                <p>You haven&apos;t played yet. A round takes about two minutes.</p>
+                <Link to="/games" className="pf-link">Play Brain Gym <Glyph name="arrow" /></Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {games.map((g) => {
+                  const meta = GAME_NAMES[g.gameType] || { name: g.gameType, to: '/games' };
+                  return (
+                    <div key={g.gameType} className="pf-panel pf-game">
+                      <AccuracyRing value={g.accuracy} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="pf-h3">{meta.name}</h3>
+                          <Link to={meta.to} className="pf-link text-sm">Play</Link>
+                        </div>
+                        <dl className="pf-game-stats">
+                          <div><dt>Correct</dt><dd>{g.totalCorrect}/{g.totalAttempted}</dd></div>
+                          <div><dt>Best streak</dt><dd>{g.bestStreak}</dd></div>
+                          <div><dt>Last played</dt><dd>{new Date(g.lastPlayedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</dd></div>
+                        </dl>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {/* ── Saved contests ─────────────────────── */}
+          <section id="saved" className="scroll-mt-28">
+            <SectionHead
+              eyebrow="Your list"
+              title={`Saved contests${saved.length ? ` (${saved.length})` : ''}`}
+            />
+            {loading ? (
+              <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="pf-skeleton h-[76px]" />)}</div>
+            ) : saved.length === 0 ? (
+              <div className="pf-panel pf-empty">
+                <p>No saved contests yet. Bookmark rounds from the contest list and they&apos;ll appear here.</p>
+                <Link to="/" className="pf-link">Browse contests <Glyph name="arrow" /></Link>
+              </div>
+            ) : (
+              <ul className="pf-saved">
+                {[...active, ...ended].map((c) => (
+                  <li key={c.id} className={c.timing.state === 'ended' ? 'is-ended' : undefined}>
+                    <span className="pf-saved-bar" style={{ background: colorOf(c.platform) }} />
+                    <Link to={`/contest/${c.id}`} className="min-w-0 flex-1">
+                      <span className="pf-contest-name">{c.name}</span>
+                      <span className="pf-muted">
+                        <span style={{ color: colorOf(c.platform) }}>{c.platform}</span> · {formatDate(c.startTime)} · {c.duration} min
+                      </span>
+                    </Link>
+                    <span className={c.timing.state === 'live' ? 'pf-when is-live' : 'pf-when'}>{c.timing.label}</span>
+                    <div className="pf-actions">
+                      <a href={c.url} target="_blank" rel="noopener noreferrer" className="pf-icon-btn" aria-label={`Open ${c.name} on ${c.platform}`} title="Open contest page">
+                        <Glyph name="external" />
+                      </a>
+                      {c.timing.state !== 'ended' && (
+                        <button
+                          type="button"
+                          className="pf-icon-btn"
+                          aria-label={`Add ${c.name} to calendar`}
+                          title="Add to calendar"
+                          onClick={() => addToCalendar({
+                            id: c.id,
+                            name: c.name,
+                            start: new Date(c.startTime).toISOString(),
+                            end: new Date(new Date(c.startTime).getTime() + c.duration * 60_000).toISOString(),
+                            url: c.url,
+                          })}
+                        >
+                          <Glyph name="calendarPlus" />
+                        </button>
+                      )}
+                      <button type="button" className="pf-icon-btn is-danger" aria-label={`Remove ${c.name}`} title="Remove" onClick={() => removeContest(c)}>
+                        <Glyph name="trash" />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
       </div>
-    </>
+    </div>
   );
 }
+
+/* ─── Styles ──────────────────────────────────────────────────── */
+
+const STYLES = `
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+.pf-root {
+  --pf-line: rgba(255,255,255,0.07);
+  --pf-line-strong: rgba(255,255,255,0.12);
+  position: relative; overflow-x: clip; min-height: 100vh;
+  background: #06070c; color: #cbd5e1;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.pf-wrap { width: min(100% - 32px, 1240px); margin-inline: auto; }
+.pf-glow {
+  position: absolute; top: -200px; left: 20%; width: 900px; height: 520px; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(56,189,248,0.10), transparent),
+              radial-gradient(closest-side at 80% 60%, rgba(52,211,153,0.07), transparent);
+  filter: blur(30px);
+}
+
+.pf-eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #64748b; }
+.pf-h1 { font-weight: 700; color: #f8fafc; font-size: clamp(32px, 4vw, 46px); line-height: 1.1; letter-spacing: -0.03em; }
+.pf-h2 { font-weight: 600; color: #f1f5f9; font-size: 21px; letter-spacing: -0.02em; }
+.pf-h3 { font-weight: 600; color: #f1f5f9; font-size: 17px; }
+.pf-lead { font-size: 17px; line-height: 1.6; color: #94a3b8; }
+.pf-mono { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; }
+.pf-muted { display: block; margin-top: 4px; font-size: 13px; color: #64748b; }
+
+.pf-btn-primary, .pf-btn-ghost {
+  display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 999px;
+  font-size: 14px; font-weight: 600; transition: transform .2s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
+}
+.pf-btn-primary { color: #04121c; background: linear-gradient(100deg, #7dd3fc, #6ee7b7); box-shadow: 0 10px 30px -12px rgba(56,189,248,0.6), inset 0 1px 0 rgba(255,255,255,0.5); }
+.pf-btn-primary:hover { transform: translateY(-1px); }
+.pf-btn-ghost { color: #e2e8f0; border: 1px solid var(--pf-line-strong); background: rgba(255,255,255,0.02); }
+.pf-btn-ghost:hover { border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); }
+.pf-link { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; color: #7dd3fc; transition: gap .2s ease, color .2s ease; }
+.pf-link:hover { gap: 10px; color: #bae6fd; }
+
+.pf-panel {
+  padding: 24px; border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01));
+  border: 1px solid var(--pf-line);
+}
+.pf-skeleton { border-radius: 14px; background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.05), rgba(255,255,255,0.02)); background-size: 200% 100%; animation: pf-shimmer 1.4s linear infinite; }
+@keyframes pf-shimmer { to { background-position: -200% 0; } }
+.pf-empty { display: grid; gap: 12px; justify-items: start; color: #94a3b8; font-size: 15px; }
+
+/* stats */
+.pf-stat {
+  position: relative; padding: 18px 20px; border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01));
+  border: 1px solid var(--pf-line);
+}
+.pf-stat-icon { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; color: var(--tone); background: color-mix(in srgb, var(--tone) 12%, transparent); }
+.pf-stat-value { margin-top: 16px; font-size: 34px; font-weight: 700; color: #f8fafc; letter-spacing: -0.03em; line-height: 1; }
+.pf-stat-label { margin-top: 6px; font-size: 13px; color: #64748b; }
+
+/* timeline */
+.pf-timeline { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.pf-timeline::before { content: ''; position: absolute; left: 5px; top: 18px; bottom: 18px; width: 1px; background: var(--pf-line-strong); }
+.pf-timeline li { position: relative; display: flex; align-items: center; gap: 16px; }
+.pf-timeline-dot { position: relative; flex-shrink: 0; width: 11px; height: 11px; border-radius: 99px; border: 2px solid #06070c; }
+.pf-timeline-row {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px;
+  border: 1px solid transparent; transition: background .2s ease, border-color .2s ease;
+}
+.pf-timeline-row:hover { background: rgba(255,255,255,0.03); border-color: var(--pf-line); }
+.pf-platform { display: block; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+.pf-contest-name { display: block; margin-top: 2px; font-weight: 500; color: #f1f5f9; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-when { flex-shrink: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #94a3b8; padding: 5px 9px; border-radius: 8px; background: rgba(255,255,255,0.04); }
+.pf-when.is-live { color: #fecaca; background: rgba(248,113,113,0.12); }
+
+/* profile details */
+.pf-complete { padding: 14px 16px; border-radius: 14px; background: rgba(255,255,255,0.025); border: 1px solid var(--pf-line); }
+.pf-meter { margin-top: 10px; height: 6px; border-radius: 99px; background: rgba(255,255,255,0.06); overflow: hidden; }
+.pf-meter span { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #7dd3fc, #6ee7b7); }
+.pf-bio { margin-top: 16px; font-size: 14.5px; line-height: 1.6; color: #cbd5e1; }
+.pf-details { margin-top: 14px; display: grid; }
+.pf-details > div { display: flex; justify-content: space-between; gap: 16px; padding: 11px 2px; border-top: 1px solid var(--pf-line); font-size: 14px; }
+.pf-details dt { color: #64748b; }
+.pf-details dt { flex-shrink: 0; }
+.pf-details dd { color: #e2e8f0; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.pf-handle { display: inline-flex; align-items: center; gap: 6px; color: #e2e8f0; }
+.pf-handle:hover { color: #7dd3fc; }
+.pf-add { color: #7dd3fc; font-weight: 500; }
+
+/* platform split */
+.pf-split { display: flex; gap: 4px; height: 12px; }
+.pf-split span { border-radius: 99px; min-width: 12px; }
+
+/* brain gym */
+.pf-game { display: flex; align-items: center; gap: 20px; }
+.pf-ring { position: relative; flex-shrink: 0; width: 76px; height: 76px; display: grid; place-items: center; }
+.pf-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.pf-ring circle { fill: none; stroke-width: 6; }
+.pf-ring-track { stroke: rgba(255,255,255,0.07); }
+.pf-ring-fill { stroke: #6ee7b7; stroke-linecap: round; transition: stroke-dashoffset 1s ease; }
+.pf-ring span { font-weight: 700; color: #f8fafc; font-size: 16px; }
+.pf-game-stats { margin-top: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.pf-game-stats dt { font-size: 12px; color: #64748b; }
+.pf-game-stats dd { margin-top: 2px; font-weight: 600; color: #e2e8f0; font-size: 15px; }
+
+/* saved list */
+.pf-saved { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.pf-saved li {
+  display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); border: 1px solid var(--pf-line);
+  transition: border-color .2s ease;
+}
+.pf-saved li:hover { border-color: var(--pf-line-strong); }
+.pf-saved li.is-ended { opacity: 0.55; }
+.pf-saved-bar { width: 3px; align-self: stretch; border-radius: 99px; flex-shrink: 0; }
+.pf-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.pf-icon-btn { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: #94a3b8; transition: background .2s ease, color .2s ease; }
+.pf-icon-btn:hover { color: #f1f5f9; background: rgba(255,255,255,0.06); }
+.pf-icon-btn.is-danger:hover { color: #fca5a5; background: rgba(248,113,113,0.1); }
+
+@media (max-width: 640px) {
+  .pf-panel { padding: 18px; }
+  .pf-saved li { flex-wrap: wrap; gap: 10px 14px; }
+  .pf-saved li > a { flex-basis: calc(100% - 20px); }
+  .pf-saved .pf-when { margin-left: 17px; }
+  .pf-actions { margin-left: auto; }
+  .pf-game { align-items: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-skeleton { animation: none; }
+  .pf-ring-fill, .pf-link, .pf-btn-primary, .pf-timeline-row, .pf-icon-btn { transition: none; }
+}
+`;

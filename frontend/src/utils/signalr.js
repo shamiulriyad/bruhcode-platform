@@ -40,22 +40,62 @@ export function getConnection() {
   return connection;
 }
 
+let startPromise = null;
+
 /**
- * Start the SignalR connection if not already started.
+ * Start the SignalR connection, or wait for a start that is already in progress.
+ * Throws if the connection cannot be established.
  */
 export async function startConnection() {
   const conn = getConnection();
-  if (conn.state === signalR.HubConnectionState.Disconnected) {
-    try {
-      await conn.start();
-      console.log('[SignalR] Connected.');
-      fallbackPolling = false;
-    } catch (err) {
-      console.error('[SignalR] Connection failed:', err);
-      fallbackPolling = true;
-    }
+  if (conn.state === signalR.HubConnectionState.Connected) return conn;
+  if (conn.state === signalR.HubConnectionState.Disconnected && !startPromise) {
+    startPromise = conn
+      .start()
+      .then(() => {
+        console.log('[SignalR] Connected.');
+        fallbackPolling = false;
+      })
+      .catch((err) => {
+        console.error('[SignalR] Connection failed:', err);
+        fallbackPolling = true;
+        throw err;
+      })
+      .finally(() => {
+        startPromise = null;
+      });
   }
+  if (startPromise) await startPromise;
   return conn;
+}
+
+/**
+ * Join a room's real-time group and attach event handlers.
+ * Returns a cleanup function that detaches exactly these handlers and leaves the room,
+ * so it can be returned straight from a useEffect.
+ */
+export function subscribeToRoom(roomId, handlers, { onError } = {}) {
+  let cancelled = false;
+  let conn = null;
+
+  (async () => {
+    try {
+      const c = await startConnection();
+      if (cancelled) return;
+      conn = c;
+      Object.entries(handlers).forEach(([event, handler]) => c.on(event, handler));
+      await c.invoke('JoinRoom', roomId);
+    } catch (err) {
+      if (!cancelled) onError?.(err);
+    }
+  })();
+
+  return () => {
+    cancelled = true;
+    if (!conn) return;
+    Object.entries(handlers).forEach(([event, handler]) => conn.off(event, handler));
+    conn.invoke('LeaveRoom', roomId).catch(() => {});
+  };
 }
 
 /**

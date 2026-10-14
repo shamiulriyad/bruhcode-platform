@@ -10,7 +10,7 @@ body {
     radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 32%),
     radial-gradient(circle at top right, rgba(16, 185, 129, 0.1), transparent 30%),
     linear-gradient(180deg, #050816 0%, #0a1020 44%, #060912 100%);
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .app-shell {
@@ -49,36 +49,8 @@ body {
   flex: 1 1 auto;
 }
 
-header {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(5, 8, 22, 0.78);
-  backdrop-filter: blur(18px);
-}
-
-header > div {
-  width: min(100%, 80rem);
-  margin: 0 auto;
-}
-
-header nav {
-  scrollbar-width: none;
-}
-
-header nav::-webkit-scrollbar {
-  display: none;
-}
-
 main {
   width: 100%;
-}
-
-footer {
-  margin-top: auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(5, 8, 22, 0.86);
 }
 
 img,
@@ -110,11 +82,6 @@ button:active {
 }
 
 @media (max-width: 768px) {
-  header > div {
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-
   main > div {
     padding-left: 1rem;
     padding-right: 1rem;

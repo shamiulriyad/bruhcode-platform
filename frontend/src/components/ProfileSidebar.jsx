@@ -1,167 +1,232 @@
-import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { startTransition, useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-function getInitials(user) {
-  const source = user?.displayName || user?.username || user?.email || 'CP';
+const PROFILE_PATHS = ['/profile', '/dashboard'];
+const PROFILE_SECTIONS = ['overview', 'saved'];
+
+const ICONS = {
+  overview: 'M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z',
+  saved: 'M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1Z',
+  brain: 'm8 9-4 3 4 3M16 9l4 3-4 3M13.5 6l-3 12',
+  settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z',
+  contests: 'M4 6h16M4 12h16M4 18h10',
+  calendar: 'M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z',
+  rooms: 'M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM20 19v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.15a3 3 0 0 1 0 5.7',
+  logout: 'M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h10',
+};
+
+function Icon({ name }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="ps-icon" aria-hidden="true">
+      <path d={ICONS[name]} />
+    </svg>
+  );
+}
+
+function initialsOf(user) {
+  const source = user?.displayName || user?.username || user?.email || 'C';
   return source
-    .split(' ')
-    .map((part) => part[0])
+    .split(/[\s._@-]+/)
     .filter(Boolean)
     .slice(0, 2)
-    .join('')
-    .toUpperCase();
+    .map((part) => part[0].toUpperCase())
+    .join('');
+}
+
+/* Highlights the profile section currently in view (Overview / Saved contests). */
+function useActiveSection(enabled) {
+  const [active, setActive] = useState('overview');
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const sections = PROFILE_SECTIONS.map((id) => document.getElementById(id)).filter(Boolean);
+    if (!sections.length || !('IntersectionObserver' in window)) return undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible) setActive(visible.target.id);
+      },
+      { rootMargin: '-30% 0px -55% 0px', threshold: [0, 0.25, 0.5] },
+    );
+    sections.forEach((s) => observer.observe(s));
+    return () => observer.disconnect();
+  }, [enabled]);
+  return active;
 }
 
 export default function ProfileSidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const { pathname } = useLocation();
+  const onProfile = PROFILE_PATHS.includes(pathname);
+  const activeSection = useActiveSection(onProfile);
 
-  const menuItems = [
-    { label: 'Overview', icon: '📊', id: 'overview' },
-    { label: 'Statistics', icon: '📈', id: 'stats' },
-    { label: 'Saved Contests', icon: '🔖', id: 'saved' },
-    { label: 'Brain Gym', icon: '🧠', id: 'braingym' },
-    { label: 'Settings', icon: '⚙️', id: 'settings' },
+  const items = [
+    { id: 'overview', label: 'Overview', icon: 'overview', section: true },
+    { id: 'saved', label: 'Saved contests', icon: 'saved', section: true },
+    { id: 'braingym', label: 'Brain Gym stats', icon: 'brain', to: '/profile/brain-gym' },
+    { id: 'settings', label: 'Settings', icon: 'settings', to: '/profile/settings' },
+  ];
+  const shortcuts = [
+    { label: 'Browse contests', icon: 'contests', to: '/' },
+    { label: 'Calendar', icon: 'calendar', to: '/calendar' },
+    { label: 'Practice rooms', icon: 'rooms', to: '/rooms' },
   ];
 
-  const activeClass = ({ isActive }) =>
-    `flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
-      isActive
-        ? 'bg-sky-500/20 text-sky-400 border-l-2 border-sky-500 shadow-sm'
-        : 'text-slate-400 hover:text-white hover:bg-white/5'
-    }`;
+  const isActive = (item) => (item.section ? onProfile && activeSection === item.id : pathname === item.to);
+
+  const goToSection = (id) => {
+    if (onProfile) {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      navigate('/profile', { state: { scrollTo: id } });
+    }
+  };
+
+  const memberSince = user?.createdAt
+    ? new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+    : null;
 
   return (
-    <>
-      {/* Mobile Toggle Button */}
-      <div className="lg:hidden mb-4">
-        <button
-          onClick={() => setIsMobileOpen(!isMobileOpen)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium text-slate-400 hover:text-white transition-all"
-        >
-          <span className="text-lg">☰</span>
-          {isMobileOpen ? 'Hide Menu' : 'Show Menu'}
-        </button>
-      </div>
+    <aside className="ps-root lg:sticky lg:top-24 lg:self-start">
+      <style>{STYLES}</style>
 
-      {/* Sidebar */}
-      <aside
-        className={`lg:sticky lg:top-20 lg:self-start ${
-          isMobileOpen ? 'block' : 'hidden lg:block'
-        }`}
-      >
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/55 shadow-[0_20px_60px_rgba(2,6,23,0.35)] backdrop-blur-xl">
-          {/* User Info Card */}
-          <div className="border-b border-white/5 bg-gradient-to-br from-sky-500/10 via-slate-900/10 to-emerald-500/10 p-5">
-            <div className="flex items-start gap-4">
-              <div className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-sky-400 to-emerald-400 text-lg font-bold text-slate-950 ring-2 ring-white/10">
-                {user?.profilePictureUrl ? (
-                  <img
-                    src={user.profilePictureUrl}
-                    alt={user?.displayName || 'Profile'}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  getInitials(user)
-                )}
-              </div>
-              <div className="min-w-0 flex-1 pt-1">
-                <div className="text-base font-semibold text-white truncate">
-                  {user?.displayName || 'User'}
-                </div>
-                <div className="mt-1 text-xs text-slate-400 truncate">
-                  {user?.email}
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 h-1 w-16 rounded-full bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-400"></div>
-
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Bio</div>
-              <p className="mt-2 text-sm leading-6 text-slate-300">
-                {user?.bio?.trim() || 'Add a short bio to make your profile feel more personal and premium.'}
-              </p>
-            </div>
+      <div className="ps-card">
+        {/* Identity */}
+        <div className="ps-user">
+          <div className="ps-avatar">
+            {user?.profilePictureUrl ? (
+              <img src={user.profilePictureUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initialsOf(user)
+            )}
           </div>
-
-          {/* Menu Items */}
-          <nav className="flex flex-col gap-1 p-3">
-            {menuItems.map((item) => {
-              const isActive = item.id === 'settings'
-                ? location.pathname === '/profile/settings'
-                : item.id === 'braingym'
-                ? location.pathname === '/profile/brain-gym'
-                : (location.pathname === '/profile' || location.pathname === '/dashboard');
-
-              return (
-                <a
-                  key={item.id}
-                  href={`#${item.id}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setIsMobileOpen(false);
-                    if (item.id === 'settings') {
-                      navigate('/profile/settings');
-                      return;
-                    }
-                    if (item.id === 'braingym') {
-                      navigate('/profile/brain-gym');
-                      return;
-                    }
-                    const isProfilePage = location.pathname === '/profile' || location.pathname === '/dashboard';
-                    if (isProfilePage) {
-                      const target = document.getElementById(item.id);
-                      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    } else {
-                      navigate('/profile', { state: { scrollTo: item.id } });
-                    }
-                  }}
-                  className={`${activeClass({ isActive })} cursor-pointer rounded-xl`}
-                >
-                  <span className="text-xl">{item.icon}</span>
-                  <span>{item.label}</span>
-                </a>
-              );
-            })}
-          </nav>
-
-          {/* Quick Stats */}
-          <div className="border-t border-white/5 bg-black/20 p-4">
-            <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Quick Stats
-            </div>
-            <div className="space-y-3 rounded-2xl border border-white/5 bg-white/[0.02] p-4">
-              <div className="flex justify-between gap-4 text-sm">
-                <span className="text-slate-400">Joined</span>
-                <span className="text-white font-mono text-xs">
-                  {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
-                </span>
-              </div>
-              <div className="h-px bg-white/5"></div>
-              <div className="flex justify-between gap-4 text-sm">
-                <span className="text-slate-400">Status</span>
-                <span className="text-emerald-400 text-xs font-semibold">🟢 Active</span>
-              </div>
-            </div>
-
-            {/* Logout Button */}
-            <button
-              onClick={() => {
-                logout();
-                navigate('/');
-              }}
-              className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 font-medium transition-all hover:bg-red-500/20 hover:border-red-500/50 hover:shadow-sm group"
-            >
-              <span className="text-lg">🚪</span>
-              <span className="transition-colors group-hover:text-red-200">Logout</span>
-            </button>
+          <div className="min-w-0">
+            <div className="ps-name">{user?.displayName || 'Coder'}</div>
+            <div className="ps-handle">@{user?.username || user?.email?.split('@')[0]}</div>
           </div>
         </div>
-      </aside>
+        {memberSince && <div className="ps-since">Member since {memberSince}</div>}
 
-    </>
+        {/* Main navigation */}
+        <nav aria-label="Profile" className="ps-nav">
+          <div className="ps-group-label">Account</div>
+          <ul className="ps-list">
+            {items.map((item) => {
+              const active = isActive(item);
+              const className = active ? 'ps-link is-active' : 'ps-link';
+              return (
+                <li key={item.id}>
+                  {item.section ? (
+                    <button type="button" className={className} aria-current={active ? 'true' : undefined} onClick={() => goToSection(item.id)}>
+                      <Icon name={item.icon} /> <span>{item.label}</span>
+                    </button>
+                  ) : (
+                    <Link to={item.to} className={className} aria-current={active ? 'page' : undefined}>
+                      <Icon name={item.icon} /> <span>{item.label}</span>
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="ps-group-label ps-hide-mobile">Shortcuts</div>
+          <ul className="ps-list ps-hide-mobile">
+            {shortcuts.map((s) => (
+              <li key={s.to}>
+                <Link to={s.to} className="ps-link"><Icon name={s.icon} /> <span>{s.label}</span></Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <button
+          type="button"
+          className="ps-logout"
+          onClick={() => startTransition(() => {
+            // Same transition as the route change, so protected pages don't bounce to /login
+            navigate('/');
+            logout();
+          })}
+        >
+          <Icon name="logout" /> <span>Sign out</span>
+        </button>
+      </div>
+    </aside>
   );
 }
+
+const STYLES = `
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+
+.ps-root { font-family: 'DM Sans', system-ui, sans-serif; }
+.ps-card {
+  position: relative; padding: 20px; border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.012));
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 30px 80px -40px rgba(0,0,0,0.8);
+  backdrop-filter: blur(16px);
+}
+.ps-card::before {
+  content: ''; position: absolute; inset: 0 24px auto; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(125,211,252,0.45), transparent);
+}
+
+.ps-user { display: flex; align-items: center; gap: 14px; }
+.ps-avatar {
+  flex-shrink: 0; width: 52px; height: 52px; border-radius: 16px; overflow: hidden;
+  display: grid; place-items: center; font-weight: 700; font-size: 18px; color: #04121c;
+  background: linear-gradient(135deg, #7dd3fc, #6ee7b7);
+  box-shadow: 0 10px 30px -10px rgba(56,189,248,0.6), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+.ps-name { font-weight: 600; font-size: 16px; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps-handle { margin-top: 2px; font-size: 13px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps-since { margin-top: 14px; padding: 8px 12px; border-radius: 10px; font-size: 12px; color: #7c879b; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.05); }
+
+.ps-nav { margin-top: 20px; }
+.ps-group-label { margin: 18px 12px 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #475569; }
+.ps-group-label:first-child { margin-top: 0; }
+.ps-list { display: grid; gap: 2px; }
+.ps-link {
+  position: relative; width: 100%; display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 12px; font-size: 14px; font-weight: 500; color: #94a3b8; text-align: left;
+  transition: color .2s ease, background .2s ease;
+}
+.ps-link:hover { color: #f1f5f9; background: rgba(255,255,255,0.04); }
+.ps-link.is-active { color: #f0f9ff; background: linear-gradient(90deg, rgba(56,189,248,0.16), rgba(56,189,248,0.04)); }
+.ps-link.is-active::before {
+  content: ''; position: absolute; left: -20px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #7dd3fc, #6ee7b7); box-shadow: 0 0 12px rgba(56,189,248,0.6);
+}
+.ps-link.is-active .ps-icon { color: #7dd3fc; }
+.ps-icon { width: 18px; height: 18px; flex-shrink: 0; color: #64748b; transition: color .2s ease; }
+.ps-link:hover .ps-icon { color: #cbd5e1; }
+
+.ps-logout {
+  margin-top: 20px; width: 100%; display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 12px; font-size: 14px; font-weight: 500; color: #94a3b8;
+  border-top: 1px solid rgba(255,255,255,0.06); border-radius: 0 0 12px 12px; padding-top: 16px;
+  transition: color .2s ease;
+}
+.ps-logout:hover { color: #fca5a5; }
+.ps-logout:hover .ps-icon { color: #fca5a5; }
+
+/* Phone & tablet: compact card with a horizontal tab strip */
+@media (max-width: 1023px) {
+  .ps-card { padding: 16px; }
+  .ps-nav { margin-top: 14px; }
+  .ps-nav > .ps-group-label, .ps-hide-mobile, .ps-since { display: none; }
+  .ps-list { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -4px; padding: 0 4px; }
+  .ps-list::-webkit-scrollbar { display: none; }
+  .ps-link { white-space: nowrap; width: auto; border: 1px solid rgba(255,255,255,0.07); }
+  .ps-link.is-active { border-color: rgba(56,189,248,0.35); }
+  .ps-link.is-active::before { display: none; }
+  .ps-logout { margin-top: 12px; padding: 12px 4px 0; }
+  .ps-list.ps-hide-mobile { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ps-link, .ps-icon, .ps-logout { transition: none; }
+}
+`;

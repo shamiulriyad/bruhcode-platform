@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { contestAPI, userAPI } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { addToCalendar } from '../utils/calendar';
+import { REMINDER_LEAD_MINUTES, disableReminders, enableReminders, useRemindersEnabled } from '../utils/reminders';
 
 /* ─── Platform config ──────────────────────────────────────────── */
 const PLATFORMS = {
@@ -528,6 +529,14 @@ function MiniCalendar({ contests }) {
   );
 }
 
+function QaIcon({ d }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
+}
+
 /* ─── Main ─────────────────────────────────────────────────────── */
 export default function Home() {
   const navigate = useNavigate();
@@ -538,6 +547,8 @@ export default function Home() {
   const [platFilter, setPlatFilter] = useState("All");
   const [timeFilter, setTimeFilter] = useState("All");
   const [search, setSearch] = useState("");
+  const [flashFilters, setFlashFilters] = useState(false);
+  const remindersOn = useRemindersEnabled();
   const [viewportWidth, setViewportWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
 
   useEffect(() => {
@@ -590,6 +601,35 @@ export default function Home() {
     return acc;
   }, {});
 
+  /* ── Quick actions ── */
+  const browseByPlatform = (platform) => {
+    if (platform) setPlatFilter(platform);
+    document.getElementById("home-filters")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFlashFilters(true);
+    setTimeout(() => setFlashFilters(false), 1600);
+  };
+
+  const toggleReminders = async () => {
+    if (remindersOn) {
+      disableReminders();
+      toast("Reminders turned off");
+      return;
+    }
+    if (!isAuthenticated) {
+      toast.error("Sign in to get reminders for the contests you save.");
+      navigate("/login");
+      return;
+    }
+    const result = await enableReminders();
+    if (result === "granted") {
+      toast.success(`Reminders on — we'll notify you ${REMINDER_LEAD_MINUTES} min before your saved contests while BRUHCODE is open.`, { duration: 5000 });
+    } else if (result === "unsupported") {
+      toast.error("This browser doesn't support notifications. Use “+ Cal” on a contest to add it to your calendar instead.", { duration: 6000 });
+    } else {
+      toast.error("Notifications are blocked. Allow them for this site in your browser settings, or use “+ Cal” on a contest.", { duration: 6000 });
+    }
+  };
+
   const handleSave = async (contestId) => {
     if (!isAuthenticated) { toast.error("Please sign in to save contests."); navigate("/login"); return; }
     try {
@@ -610,6 +650,21 @@ export default function Home() {
         @keyframes shimmer { from{background-position:-200% center} to{background-position:200% center} }
         .home-root input::placeholder { color: #1e293b; }
         .home-root input:focus { outline: none; }
+        .home-qa { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 12px; text-align: left; cursor: pointer;
+          font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: #cbd5e1;
+          background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); transition: border-color .15s, background .15s, color .15s; }
+        .home-qa:hover { color: #f8fafc; border-color: rgba(129,140,248,0.35); background: rgba(129,140,248,0.06); }
+        .home-qa:focus-visible { outline: 2px solid #818cf8; outline-offset: 2px; }
+        .home-qa svg { flex-shrink: 0; width: 16px; height: 16px; color: #818cf8; }
+        .home-qa-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: #64748b; }
+        .home-qa.is-on { border-color: rgba(52,211,153,0.35); background: rgba(52,211,153,0.06); }
+        .home-qa.is-on svg { color: #34d399; }
+        .home-qa-dot { width: 7px; height: 7px; border-radius: 99px; background: #34d399; box-shadow: 0 0 8px #34d399; }
+        .home-plat-row { border-left: 0; border-right: 0; border-top: 0; transition: background .15s; }
+        .home-plat-row:hover { background: rgba(255,255,255,0.04) !important; }
+        .home-filters { border-radius: 14px; transition: box-shadow .3s ease, background .3s ease; }
+        .home-filters.is-flash { box-shadow: 0 0 0 2px rgba(129,140,248,0.55), 0 0 30px rgba(129,140,248,0.25); background: rgba(129,140,248,0.05); }
+        @media (prefers-reduced-motion: reduce) { .home-qa, .home-filters, .home-plat-row { transition: none; } }
         .home-root button { outline: none; }
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -698,7 +753,7 @@ export default function Home() {
               </div>
 
               {/* Filters + Search */}
-              <div style={{
+              <div id="home-filters" className={flashFilters ? "home-filters is-flash" : "home-filters"} style={{
                 display: "flex", alignItems: "center", gap: 8,
                 flexWrap: "wrap", marginBottom: 20,
                 animation: "fadeUp 0.4s ease 0.3s both",
@@ -862,9 +917,10 @@ export default function Home() {
               }}>
                 <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: "#334155", letterSpacing: "0.18em", marginBottom: 14 }}>PLATFORMS</div>
                 {Object.entries(PLATFORMS).map(([key, p]) => (
-                  <div key={key} style={{
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                    padding: "8px 0",
+                  <button key={key} type="button" className="home-plat-row" onClick={() => browseByPlatform(key)} aria-pressed={platFilter === key} title={`Show only ${p.name} contests`} style={{
+                    width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "8px 6px", margin: "0 -6px", borderRadius: 8, cursor: "pointer",
+                    background: platFilter === key ? "rgba(255,255,255,0.04)" : "transparent",
                     borderBottom: "1px solid rgba(255,255,255,0.04)",
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -874,7 +930,7 @@ export default function Home() {
                     <span style={{ fontSize: 12, fontWeight: 700, color: p.color, fontFamily: "'JetBrains Mono', monospace" }}>
                       {platCounts[key]}
                     </span>
-                  </div>
+                  </button>
                 ))}
               </div>
 
@@ -885,25 +941,30 @@ export default function Home() {
               }}>
                 <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: "#334155", letterSpacing: "0.18em", marginBottom: 12 }}>QUICK ACTIONS</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {[
-                    { label: "Set reminder alerts", icon: "🔔" },
-                    { label: "Browse by platform",  icon: "🔍" },
-                    { label: "View calendar",        icon: "🗓" },
-                  ].map(({ label, icon }) => (
-                    <button key={label} style={{
-                      fontSize: 12, padding: "9px 12px", borderRadius: 10,
-                      background: "transparent", border: "1px solid rgba(255,255,255,0.05)",
-                      color: "#475569", cursor: "pointer", textAlign: "left",
-                      fontFamily: "'DM Sans', sans-serif",
-                      display: "flex", alignItems: "center", gap: 8,
-                      transition: "border-color 0.15s, color 0.15s",
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(99,102,241,0.2)"; e.currentTarget.style.color = "#818cf8"; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "#475569"; }}
-                    >
-                      <span style={{ fontSize: 13 }}>{icon}</span> {label} ↗
-                    </button>
-                  ))}
+                  <button type="button" className={remindersOn ? "home-qa is-on" : "home-qa"} onClick={toggleReminders} aria-pressed={remindersOn}>
+                    <QaIcon d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                    <span style={{ flex: 1 }}>
+                      {remindersOn ? "Reminders on" : "Set reminder alerts"}
+                      <span className="home-qa-sub">
+                        {remindersOn ? `${REMINDER_LEAD_MINUTES} min before saved contests · tap to turn off` : `Get notified ${REMINDER_LEAD_MINUTES} min before saved contests`}
+                      </span>
+                    </span>
+                    {remindersOn && <span className="home-qa-dot" />}
+                  </button>
+                  <button type="button" className="home-qa" onClick={() => browseByPlatform()}>
+                    <QaIcon d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-4-4" />
+                    <span style={{ flex: 1 }}>
+                      Browse by platform
+                      <span className="home-qa-sub">Filter the list to one judge</span>
+                    </span>
+                  </button>
+                  <button type="button" className="home-qa" onClick={() => navigate("/calendar")}>
+                    <QaIcon d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />
+                    <span style={{ flex: 1 }}>
+                      View calendar
+                      <span className="home-qa-sub">{isAuthenticated ? "Month and week views" : "Sign in to open your calendar"}</span>
+                    </span>
+                  </button>
                 </div>
               </div>
             </div>

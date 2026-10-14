@@ -56,6 +56,10 @@ namespace Backend.Controllers
         public async Task<IActionResult> Create([FromBody] CreateRoomRequest req)
         {
             var userId = GetUserId();
+            if (string.IsNullOrWhiteSpace(req.Name)) return BadRequest(new { error = "Room name is required" });
+            var problems = (req.Problems ?? new List<ProblemInput>()).Where(p => !string.IsNullOrWhiteSpace(p.Name)).ToList();
+            if (problems.Count == 0) return BadRequest(new { error = "Add at least one problem" });
+
             var contest = await _db.Contests.FindAsync(req.ContestId);
             if (contest == null) return NotFound(new { error = "Contest not found" });
 
@@ -68,7 +72,7 @@ namespace Backend.Controllers
 
             var room = new Room
             {
-                Name = req.Name,
+                Name = req.Name.Trim(),
                 ContestId = req.ContestId,
                 HostId = userId,
                 StartTime = req.StartTime.ToUniversalTime(),
@@ -82,15 +86,15 @@ namespace Backend.Controllers
             await _db.SaveChangesAsync();
 
             // Add problems
-            for (int i = 0; i < req.Problems.Count; i++)
+            for (int i = 0; i < problems.Count; i++)
             {
-                var p = req.Problems[i];
+                var p = problems[i];
                 _db.RoomProblems.Add(new RoomProblem
                 {
                     RoomId = room.Id,
                     ProblemIndex = string.IsNullOrEmpty(p.Index) ? ((char)('A' + i)).ToString() : p.Index,
-                    ProblemName = p.Name,
-                    ProblemUrl = p.Url,
+                    ProblemName = p.Name.Trim(),
+                    ProblemUrl = p.Url?.Trim() ?? "",
                     SortOrder = i,
                 });
             }

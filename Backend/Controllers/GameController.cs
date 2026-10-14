@@ -18,6 +18,10 @@ namespace Backend.Controllers
     {
         private readonly AppDbContext _db;
 
+        // Players need this many answered questions (two rounds) before they're ranked,
+        // so a single lucky round can't top an accuracy-based leaderboard.
+        public const int MinQuestionsToRank = 20;
+
         public GameController(AppDbContext db)
         {
             _db = db;
@@ -258,10 +262,12 @@ namespace Backend.Controllers
             if (game == null)
                 return NotFound(new { error = "Game not found." });
 
+            // Ranked by accuracy, then total correct, then best streak
             var leaders = await _db.UserGameScores
-                .Where(s => s.GameId == game.Id)
+                .Where(s => s.GameId == game.Id && s.TotalAttempted >= MinQuestionsToRank)
                 .Include(s => s.User)
-                .OrderByDescending(s => s.TotalCorrect)
+                .OrderByDescending(s => (double)s.TotalCorrect / s.TotalAttempted)
+                .ThenByDescending(s => s.TotalCorrect)
                 .ThenByDescending(s => s.BestStreak)
                 .Select(s => new
                 {
@@ -297,22 +303,37 @@ namespace Backend.Controllers
             var userScore = await _db.UserGameScores
                 .FirstOrDefaultAsync(s => s.UserId == userId && s.GameId == game.Id);
 
-            if (userScore == null)
+            var ranked = _db.UserGameScores.Where(s => s.GameId == game.Id && s.TotalAttempted >= MinQuestionsToRank);
+            var totalPlayers = await ranked.CountAsync();
+            var attempted = userScore?.TotalAttempted ?? 0;
+
+            if (userScore == null || attempted < MinQuestionsToRank)
             {
-                return Ok(new { rank = "-", totalPlayers = 0 });
+                return Ok(new
+                {
+                    rank = "-",
+                    totalPlayers,
+                    minQuestions = MinQuestionsToRank,
+                    questionsAnswered = attempted,
+                    questionsNeeded = MinQuestionsToRank - attempted,
+                });
             }
 
-            var totalPlayers = await _db.UserGameScores.CountAsync(s => s.GameId == game.Id);
-            var betterPlayers = await _db.UserGameScores
-                .CountAsync(s => s.GameId == game.Id && (
-                    s.TotalCorrect > userScore.TotalCorrect || 
-                    (s.TotalCorrect == userScore.TotalCorrect && s.BestStreak > userScore.BestStreak)
-                ));
+            // Compare accuracy by cross-multiplying so equal accuracies compare exactly
+            long myCorrect = userScore.TotalCorrect, myAttempted = userScore.TotalAttempted;
+            var betterPlayers = await ranked.CountAsync(s =>
+                (long)s.TotalCorrect * myAttempted > myCorrect * s.TotalAttempted ||
+                ((long)s.TotalCorrect * myAttempted == myCorrect * s.TotalAttempted && (
+                    s.TotalCorrect > userScore.TotalCorrect ||
+                    (s.TotalCorrect == userScore.TotalCorrect && s.BestStreak > userScore.BestStreak))));
 
             return Ok(new
             {
                 rank = (betterPlayers + 1).ToString(),
-                totalPlayers
+                totalPlayers,
+                minQuestions = MinQuestionsToRank,
+                questionsAnswered = attempted,
+                questionsNeeded = 0
             });
         }
 

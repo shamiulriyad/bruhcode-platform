@@ -557,12 +557,17 @@ export default function BrainGymProfilePage() {
                           <div className="text-right">
                             <span className="text-[10px] uppercase font-mono tracking-wider text-slate-500">out of</span>
                             <div className="text-base font-semibold text-slate-300 font-mono">
-                              {rankData?.totalPlayers || 0} active
+                              {rankData?.totalPlayers || 0} ranked
                             </div>
                           </div>
                         </div>
+                        {rankData?.rank === '-' && rankData?.questionsNeeded > 0 && (
+                          <p className="mb-4 text-xs text-slate-400">
+                            Answer {rankData.questionsNeeded} more question{rankData.questionsNeeded === 1 ? '' : 's'} to get ranked.
+                          </p>
+                        )}
 
-                        <Link to="/games/complexity/leaderboard" className="bg-btn bg-btn--primary">
+                        <Link to={selectedGameType === 'debug_the_code' ? '/games/debug/leaderboard' : '/games/complexity/leaderboard'} className="bg-btn bg-btn--primary">
                           View Leaderboard →
                         </Link>
                       </div>

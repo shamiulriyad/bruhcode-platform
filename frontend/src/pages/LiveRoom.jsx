@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { roomAPI } from '../api';
 import { useAuth } from '../context/AuthContext';
 import useRoomStore from '../store/useRoomStore';
-import { startConnection, isFallbackPolling } from '../utils/signalr';
+import { subscribeToRoom, isFallbackPolling } from '../utils/signalr';
 import CountdownRing from '../components/rooms/CountdownRing';
 import LeaderboardPanel from '../components/rooms/LeaderboardPanel';
 import SolveGrid from '../components/rooms/SolveGrid';
@@ -25,7 +25,6 @@ export default function LiveRoom() {
   const [threadMessages, setThreadMessages] = useState([]);
   const [threadLocked, setThreadLocked] = useState(true);
   const pollRef = useRef(null);
-  const connRef = useRef(null);
   // SignalR handlers are registered once, so they read the latest values through refs
   const selectedProblemIdRef = useRef(null);
   const userIdRef = useRef(null);
@@ -77,71 +76,44 @@ export default function LiveRoom() {
     } catch {}
   }, [id]);
 
-  // SignalR connection
+  // SignalR connection (falls back to polling the leaderboard if it can't connect)
   useEffect(() => {
-    const setupSignalR = async () => {
-      try {
-        const conn = await startConnection();
-        connRef.current = conn;
-        await conn.invoke('JoinRoom', parseInt(id));
-
-        conn.on('TimerSync', (data) => setTimer(data));
-
-        conn.on('RoomStatusChanged', (data) => {
-          if (data.status === 'Ended') {
-            toast.success('Session ended!', { icon: '🏁' });
-            navigate(`/rooms/${id}/summary`);
-          }
-        });
-
-        conn.on('GridUpdate', (data) => {
-          updateGridCell(data.userId, data.problemId, {
-            status: data.status,
-            solvedAt: data.solvedAt,
-            attempts: data.attempts,
-          });
-        });
-
-        conn.on('LeaderboardUpdate', (data) => setLeaderboard(data));
-
-        conn.on('ThreadUnlocked', (data) => {
-          // Refresh thread if viewing this problem
-          if (data.userId === userIdRef.current && data.problemId === selectedProblemIdRef.current) {
-            fetchThreadMessages(data.problemId);
-          }
-        });
-
-        conn.on('MemberJoined', (data) => addMember(data));
-        conn.on('MemberLeft', (data) => removeMember(data.userId));
-
-        conn.on('NewMessage', (msg) => {
-          if (msg.problemId === selectedProblemIdRef.current) {
-            setThreadMessages((prev) => [...prev, msg]);
-          }
-        });
-      } catch (err) {
+    const unsubscribe = subscribeToRoom(parseInt(id, 10), {
+      TimerSync: (data) => setTimer(data),
+      RoomStatusChanged: (data) => {
+        if (data.status === 'Ended') {
+          toast.success('Session ended!', { icon: '🏁' });
+          navigate(`/rooms/${id}/summary`);
+        }
+      },
+      GridUpdate: (data) => updateGridCell(data.userId, data.problemId, {
+        status: data.status,
+        solvedAt: data.solvedAt,
+        attempts: data.attempts,
+      }),
+      LeaderboardUpdate: (data) => setLeaderboard(data),
+      ThreadUnlocked: (data) => {
+        // Refresh the thread if it's the one being viewed
+        if (data.userId === userIdRef.current && data.problemId === selectedProblemIdRef.current) {
+          fetchThreadMessages(data.problemId);
+        }
+      },
+      MemberJoined: (data) => addMember(data),
+      MemberLeft: (data) => removeMember(data.userId),
+      NewMessage: (msg) => {
+        if (msg.problemId === selectedProblemIdRef.current) {
+          setThreadMessages((prev) => [...prev, msg]);
+        }
+      },
+    }, {
+      onError: (err) => {
         console.error('SignalR error:', err);
-        // Start fallback polling
-        pollRef.current = setInterval(() => {
-          fetchLeaderboard();
-        }, 10000);
-      }
-    };
-
-    setupSignalR();
+        pollRef.current = setInterval(fetchLeaderboard, 10000);
+      },
+    });
 
     return () => {
-      if (connRef.current) {
-        connRef.current.invoke('LeaveRoom', parseInt(id)).catch(() => {});
-        connRef.current.off('TimerSync');
-        connRef.current.off('RoomStatusChanged');
-        connRef.current.off('GridUpdate');
-        connRef.current.off('LeaderboardUpdate');
-        connRef.current.off('ThreadUnlocked');
-        connRef.current.off('MemberJoined');
-        connRef.current.off('MemberLeft');
-        connRef.current.off('NewMessage');
-      }
+      unsubscribe();
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [id, navigate, fetchLeaderboard, fetchThreadMessages, setTimer, setLeaderboard, updateGridCell, addMember, removeMember]);
